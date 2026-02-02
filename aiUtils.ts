@@ -1,4 +1,4 @@
-import { SVGElementData, PathElementProps, AnySVGGradient, RectElementProps, CircleElementProps, BezierPoint, AILogEntry, AppAction, Artboard } from './types';
+import { SVGElementData, PathElementProps, AnySVGGradient, RectElementProps, CircleElementProps, BezierPoint, AILogEntry, AppAction, Artboard, AiPlan } from './types';
 import { buildPathDFromStructuredPoints } from './utils/pathUtils'; 
 import { generateUniqueId } from "./contexts/appContextUtils";
 
@@ -7,6 +7,9 @@ const AI_API_BASE = import.meta.env.VITE_AI_API_BASE || '';
 interface AiPromptElementInput {
   id: string;
   type: SVGElementData['type'];
+  name?: string;
+  parentId?: string | null;
+  order?: number;
   x: number;
   y: number;
   fill: string | any;
@@ -32,16 +35,24 @@ interface AiPromptPayload {
   animationDuration: number;
   elementToAnimate: AiPromptElementInput | null;
   existingElements: AiPromptElementInput[];
+  canvasState: {
+    selectedElementId: string | null;
+    currentTime: number;
+    animationDuration: number;
+    elementsCount: number;
+  };
 }
 
 interface AiResponse {
   summary: string;
   actions: AppAction[];
+  plan?: AiPlan;
 }
 
 export interface AIGenerationResult {
   actions: AppAction[];
   log: AILogEntry;
+  plan?: AiPlan;
 }
 
 
@@ -71,6 +82,9 @@ function prepareElementForPrompt(element: SVGElementData): AiPromptElementInput 
     const preparedElement: AiPromptElementInput = {
         id: restOfBase.id,
         type: restOfBase.type,
+        name: restOfBase.name,
+        parentId: restOfBase.parentId,
+        order: restOfBase.order,
         x: restOfBase.x ?? 0,
         y: restOfBase.y ?? 0,
         fill: fillStringForAI,
@@ -114,7 +128,8 @@ export const generateAiActions = async (
   userTextInput: string,
   animationDuration: number,
   artboard: Artboard,
-  allElements: SVGElementData[]
+  allElements: SVGElementData[],
+  currentTime: number
 ): Promise<AIGenerationResult> => {
   const elementForPrompt = selectedElement ? prepareElementForPrompt(selectedElement) : null;
   const existingElementsForPrompt = allElements.map(prepareElementForPrompt);
@@ -125,6 +140,12 @@ export const generateAiActions = async (
     animationDuration: animationDuration,
     elementToAnimate: elementForPrompt,
     existingElements: existingElementsForPrompt,
+    canvasState: {
+      selectedElementId: selectedElement ? selectedElement.id : null,
+      currentTime: currentTime || 0,
+      animationDuration: animationDuration,
+      elementsCount: allElements.length,
+    },
   };
   try {
     const response = await fetch(`${AI_API_BASE}/api/ai/generate`, {
@@ -140,7 +161,8 @@ export const generateAiActions = async (
     if (parsedData && Array.isArray(parsedData.actions) && typeof parsedData.summary === 'string') {
         // Replace placeholder IDs
         const idMap = new Map<string, string>();
-        let stringifiedActions = JSON.stringify(parsedData.actions);
+        const dataForReplace = { actions: parsedData.actions, plan: parsedData.plan || null };
+        let stringifiedActions = JSON.stringify(dataForReplace);
         const placeholderRegex = /\{\{NEW_ID_(\d+)\}\}/g;
         
         stringifiedActions = stringifiedActions.replace(placeholderRegex, (match, p1) => {
@@ -151,7 +173,9 @@ export const generateAiActions = async (
             return idMap.get(placeholder)!;
         });
 
-        const finalActions = JSON.parse(stringifiedActions) as AppAction[];
+        const parsedReplaced = JSON.parse(stringifiedActions) as { actions: AppAction[]; plan: AiPlan | null };
+        const finalActions = parsedReplaced.actions;
+        const finalPlan = parsedReplaced.plan || undefined;
         
         const message = parsedData.summary.trim() || `Generated ${finalActions.length} action(s).`;
 
@@ -161,7 +185,7 @@ export const generateAiActions = async (
             status: 'success',
             message: message
         };
-        return { actions: finalActions, log };
+        return { actions: finalActions, log, plan: finalPlan };
     }
     console.warn("AI response was not in the expected format:", parsedData);
     const errorLog: AILogEntry = {

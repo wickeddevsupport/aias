@@ -8,7 +8,7 @@ interface MaestroPanelProps {
 
 const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => {
   const { state, dispatch } = useContext(AppContext);
-  const { aiLogs, aiPrompt, isAiLoading, aiError, selectedElementId, elements, artboard } = state;
+  const { aiLogs, aiPrompt, isAiLoading, aiError, selectedElementId, elements, artboard, aiPlan, aiPlanProgress } = state;
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -44,6 +44,13 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
     }
   }
 
+  const currentPlanStepIndex = aiPlanProgress?.currentStepIndex ?? -1;
+  const currentPlanStep = aiPlan?.steps?.[currentPlanStepIndex];
+  const nextPlanStep = aiPlan?.steps?.[currentPlanStepIndex + 1];
+  const currentActionTypes = currentPlanStep?.actions
+    ? Array.from(new Set(currentPlanStep.actions.map(action => action.type))).slice(0, 5)
+    : [];
+
   return (
     <div className="p-3 space-y-3 h-full max-h-[95%] flex flex-col bg-transparent">
       <h3 className="text-lg font-semibold text-text-primary flex items-center flex-shrink-0">
@@ -53,6 +60,51 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
       <div className="flex-shrink-0 text-xs text-text-secondary border border-dashed border-[var(--glass-border-color)] p-2 rounded-md">
         <strong>Context:</strong> <span className="text-accent-color font-semibold">{selectedElementName}</span>
       </div>
+      {aiPlan && (
+        <div className="flex-shrink-0 border border-[var(--glass-border-color)] rounded-md p-2 bg-[rgba(var(--accent-rgb),0.04)]">
+          <div className="flex items-center justify-between text-xs text-text-secondary">
+            <span className="font-semibold text-accent-color">Live Plan</span>
+            <span>{aiPlanProgress.status === 'running' ? 'Executing...' : aiPlanProgress.status === 'done' ? 'Done' : 'Idle'}</span>
+          </div>
+          <p className="text-xs text-text-primary mt-1">{aiPlan.summary}</p>
+          <div className="mt-2 space-y-1">
+            {aiPlan.steps.map((step, index) => {
+              const isCurrent = index === currentPlanStepIndex;
+              const isCompleted = index < currentPlanStepIndex && aiPlanProgress.status !== 'error';
+              return (
+                <div key={step.id} className={`flex items-center justify-between text-xs p-1.5 rounded ${isCurrent ? 'bg-[rgba(var(--accent-rgb),0.12)] text-text-primary' : 'text-text-secondary'}`}>
+                  <div className="flex items-center space-x-2">
+                    <span className={`inline-flex w-4 h-4 items-center justify-center rounded-full border ${isCompleted ? 'border-green-400 text-green-400' : isCurrent ? 'border-accent-color text-accent-color' : 'border-[var(--glass-border-color)] text-text-secondary'}`}>
+                      {isCompleted ? '✓' : index + 1}
+                    </span>
+                    <span className="font-medium">{step.title}</span>
+                  </div>
+                  <span className="text-[10px] text-text-placeholder">{step.actions?.length || 0} actions</span>
+                </div>
+              );
+            })}
+          </div>
+          {currentPlanStep && (
+            <div className="mt-2 text-xs text-text-secondary">
+              <strong>Now:</strong> {currentPlanStep.title}
+            </div>
+          )}
+          {currentActionTypes.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {currentActionTypes.map(type => (
+                <span key={type} className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(var(--accent-rgb),0.15)] text-accent-color">
+                  {type}
+                </span>
+              ))}
+            </div>
+          )}
+          {nextPlanStep && (
+            <div className="text-xs text-text-placeholder">
+              <strong>Next:</strong> {nextPlanStep.title}
+            </div>
+          )}
+        </div>
+      )}
       {/* Log Area */}
       <div ref={logContainerRef} className="flex-1 overflow-y-auto custom-scrollbar border-y border-[var(--glass-border-color)] py-2 space-y-4">
         {aiLogs.length === 0 ? (

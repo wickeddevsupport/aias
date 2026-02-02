@@ -54,6 +54,8 @@ export function detectKeywords(text) {
     draw: /\b(draw|sketch|trace)\b/.test(t),
     animate: /\b(animate|animation|loop|motion)\b/.test(t),
     loop: /\b(loop|repeat|seamless)\b/.test(t),
+    play: /\b(play|start)\b/.test(t),
+    pause: /\b(pause|stop)\b/.test(t),
     bounce: /\b(bounce|bouncy|jump)\b/.test(t),
     dance: /\b(dance|groove)\b/.test(t),
     spin: /\b(spin|rotate|twirl)\b/.test(t),
@@ -73,10 +75,18 @@ export function detectKeywords(text) {
     right: /\bright\b/.test(t),
     up: /\bup\b|\btop\b/.test(t),
     down: /\bdown\b|\bbottom\b/.test(t),
+    leftmost: /\bleftmost\b/.test(t),
+    rightmost: /\brightmost\b/.test(t),
+    topmost: /\btopmost\b/.test(t),
+    bottommost: /\bbottommost\b/.test(t),
+    largest: /\b(largest|biggest)\b/.test(t),
+    smallest: /\b(smallest|tiny)\b/.test(t),
     center: /\bcenter|centre|middle\b/.test(t),
     background: /\b(background|bg)\b/.test(t),
     foreground: /\b(foreground|front)\b/.test(t),
     subject: /\b(subject|person|main)\b/.test(t),
+    existing: /\b(existing|current|selected)\b/.test(t),
+    all: /\b(all|everything|entire)\b/.test(t),
     scene: /\b(scene|landscape|environment)\b/.test(t),
     sunset: /\b(sunset|sunrise|dawn|dusk)\b/.test(t),
     ocean: /\b(ocean|sea|beach)\b/.test(t),
@@ -214,6 +224,24 @@ export function extractFontSize(text) {
   const t = normalizeText(text);
   const match = t.match(/\b(font\s*size|size)\s*(\d+(\.\d+)?)\b/);
   if (match) return parseFloat(match[2]);
+  return null;
+}
+
+export function extractDurationSeconds(text) {
+  const t = normalizeText(text);
+  const durationMatch = t.match(/\b(duration|length)\s*(\d+(\.\d+)?)\b/);
+  if (durationMatch) return parseFloat(durationMatch[2]);
+  const secondsMatch = t.match(/\b(\d+(\.\d+)?)\s*(s|sec|secs|seconds)\b/);
+  if (secondsMatch) return parseFloat(secondsMatch[1]);
+  return null;
+}
+
+export function extractPlaybackSpeed(text) {
+  const t = normalizeText(text);
+  const speedMatch = t.match(/\b(speed|playback)\s*(\d+(\.\d+)?)\b/);
+  if (speedMatch) return parseFloat(speedMatch[2]);
+  const xMatch = t.match(/\b(\d+(\.\d+)?)x\b/);
+  if (xMatch) return parseFloat(xMatch[1]);
   return null;
 }
 

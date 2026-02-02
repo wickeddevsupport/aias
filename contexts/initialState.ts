@@ -58,6 +58,8 @@ export const getInitialState = (): AppState => {
         isAiLoading: false,
         aiError: null,
         aiLogs: [],
+        aiPlan: null,
+        aiPlanProgress: { status: 'idle', currentStepIndex: -1 },
         motionPathSelectionTargetElementId: null,
         textOnPathSelectionTargetElementId: null, 
         previewTarget: null,

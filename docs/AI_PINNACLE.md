@@ -141,3 +141,9 @@ V2 should:
 - Richer photo pipeline (silhouette tracing + mask refinement).
 - Scoring + guardrails (quality thresholds with auto fallback tiers).
 
+## V3 Status (2026-02-02)
+- Context-aware AI: prompt + canvas elements + selection + timing feed into planning.
+- Multi-step plan output: structured steps with per-step actions and live execution.
+- Live UX: Maestro panel shows plan, current step, and next step while actions execute.
+- Autonomous chaining: steps execute sequentially with validation and live canvas updates.
+

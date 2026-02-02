@@ -19,7 +19,7 @@ import {
     handleUpdateAnimationFromAI
 } from './actionHandlers/animationActions';
 import { handleAddAsset, handleAddAssetFromLibrary, handleDeleteAsset } from './actionHandlers/assetActions';
-import { handleAddAiLog } from './actionHandlers/aiActions';
+import { handleAddAiLog, handleSetAiPlan, handleSetAiPlanProgress, handleClearAiPlan } from './actionHandlers/aiActions';
 import {
     handleStartDrawingBezierPath, handleStartExtendingBezierPath, handleAddBezierPathPoint,
     handleFinishDrawingBezierPath, handleCancelDrawingBezierPath,
@@ -110,6 +110,9 @@ function getActionSubReducerResult(state: AppState, action: AppAction): AnySubRe
 
     // AI Actions
     case 'ADD_AI_LOG': return handleAddAiLog(state, action.payload);
+    case 'SET_AI_PLAN': return handleSetAiPlan(state, action.payload);
+    case 'SET_AI_PLAN_PROGRESS': return handleSetAiPlanProgress(state, action.payload);
+    case 'CLEAR_AI_PLAN': return handleClearAiPlan(state);
     
     // UI/Tool/State Actions
     case 'SET_SELECTED_ELEMENT_ID': return handleSetSelectedElementId(state, action.payload);

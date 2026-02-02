@@ -351,6 +351,26 @@ export interface AILogEntry {
   message: string;
 }
 
+export interface AiPlanStep {
+  id: string;
+  title: string;
+  rationale?: string;
+  actions: AppAction[];
+}
+
+export interface AiPlan {
+  id: string;
+  summary: string;
+  steps: AiPlanStep[];
+  createdAt: string;
+}
+
+export interface AiPlanProgress {
+  status: 'idle' | 'running' | 'done' | 'error';
+  currentStepIndex: number;
+  message?: string;
+}
+
 export interface ImageAsset {
   id: string;
   type: 'image';
@@ -399,6 +419,8 @@ export interface AppState {
   isAiLoading: boolean;
   aiError: string | null;
   aiLogs: AILogEntry[];
+  aiPlan: AiPlan | null;
+  aiPlanProgress: AiPlanProgress;
   motionPathSelectionTargetElementId: string | null;
   textOnPathSelectionTargetElementId: string | null; 
   previewTarget: {
@@ -547,6 +569,9 @@ export type AppAction =
   | { type: 'SET_AI_LOADING'; payload: boolean }
   | { type: 'SET_AI_ERROR'; payload: string | null }
   | { type: 'ADD_AI_LOG'; payload: AILogEntry }
+  | { type: 'SET_AI_PLAN'; payload: AiPlan | null }
+  | { type: 'SET_AI_PLAN_PROGRESS'; payload: AiPlanProgress }
+  | { type: 'CLEAR_AI_PLAN' }
   | { type: 'EXECUTE_AI_ACTIONS_BATCH', payload: { actions: AppAction[], log: string } }
   | { type: 'SET_MOTION_PATH_SELECTION_TARGET'; payload: string | null }
   | { type: 'ASSIGN_MOTION_PATH'; payload: { elementId: string; pathId: string | null } }

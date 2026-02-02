@@ -984,6 +984,7 @@ const App: React.FC = () => {
 
     dispatch({ type: 'SET_AI_LOADING', payload: true });
     dispatch({ type: 'SET_AI_ERROR', payload: null });
+    dispatch({ type: 'CLEAR_AI_PLAN' });
     
     try {
       // The AI can now handle creation, so we don't need to check for a selected element here.
@@ -995,27 +996,47 @@ const App: React.FC = () => {
         animation.duration,
         artboard,
         elements,
+        currentTime,
       );
       
       dispatch({ type: 'ADD_AI_LOG', payload: result.log });
 
-      if (result.actions && result.actions.length > 0) {
-         dispatch({ 
-            type: 'EXECUTE_AI_ACTIONS_BATCH', 
-            payload: {
-                actions: result.actions,
-                log: result.log.message,
-            }
-         });
+      if (result.plan && result.plan.steps && result.plan.steps.length > 0) {
+        dispatch({ type: 'SET_AI_PLAN', payload: result.plan });
+        dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'running', currentStepIndex: -1 } });
+        for (let i = 0; i < result.plan.steps.length; i += 1) {
+          const step = result.plan.steps[i];
+          dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'running', currentStepIndex: i, message: step.title } });
+          if (step.actions && step.actions.length > 0) {
+            dispatch({
+              type: 'EXECUTE_AI_ACTIONS_BATCH',
+              payload: {
+                actions: step.actions,
+                log: `${result.plan.summary} • ${step.title}`,
+              },
+            });
+          }
+          await new Promise(resolve => setTimeout(resolve, 120));
+        }
+        dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'done', currentStepIndex: result.plan.steps.length - 1 } });
+      } else if (result.actions && result.actions.length > 0) {
+        dispatch({ 
+          type: 'EXECUTE_AI_ACTIONS_BATCH', 
+          payload: {
+            actions: result.actions,
+            log: result.log.message,
+          }
+        });
       } else {
         if(result.log.status === 'error') {
-            dispatch({ type: 'SET_AI_ERROR', payload: result.log.message });
+          dispatch({ type: 'SET_AI_ERROR', payload: result.log.message });
         }
       }
     } catch (error) {
       console.error("AI Generation Error:", error);
       const userFriendlyError = "An unexpected error occurred. Please try again or check the console for details.";
       dispatch({ type: 'SET_AI_ERROR', payload: userFriendlyError });
+      dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'error', currentStepIndex: -1, message: userFriendlyError } });
       dispatch({ type: 'ADD_AI_LOG', payload: {
           timestamp: new Date().toLocaleTimeString(),
           prompt: aiPrompt,
@@ -1025,7 +1046,7 @@ const App: React.FC = () => {
     } finally {
       dispatch({ type: 'SET_AI_LOADING', payload: false });
     }
-  }, [aiPrompt, selectedElementId, elements, artboard, animation.duration, dispatch]);
+  }, [aiPrompt, selectedElementId, elements, artboard, animation.duration, currentTime, dispatch]);
 
 
   const availableMotionPathSources = useMemo(() => {

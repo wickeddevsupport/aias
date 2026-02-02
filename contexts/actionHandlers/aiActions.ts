@@ -1,6 +1,6 @@
 
 
-import { AppState, AILogEntry, AppAction, SubReducerResult } from '../../types';
+import { AppState, AILogEntry, AppAction, SubReducerResult, AiPlan, AiPlanProgress } from '../../types';
 
 export function handleAddAiLog(state: AppState, payload: AILogEntry): SubReducerResult {
     // Append the new log and keep the last 100 entries for performance.
@@ -9,4 +9,16 @@ export function handleAddAiLog(state: AppState, payload: AILogEntry): SubReducer
         updatedStateSlice: { aiLogs: newLogs },
         skipHistoryRecording: true,
     };
+}
+
+export function handleSetAiPlan(state: AppState, payload: AiPlan | null): SubReducerResult {
+    return { updatedStateSlice: { aiPlan: payload }, skipHistoryRecording: true };
+}
+
+export function handleSetAiPlanProgress(state: AppState, payload: AiPlanProgress): SubReducerResult {
+    return { updatedStateSlice: { aiPlanProgress: payload }, skipHistoryRecording: true };
+}
+
+export function handleClearAiPlan(state: AppState): SubReducerResult {
+    return { updatedStateSlice: { aiPlan: null, aiPlanProgress: { status: 'idle', currentStepIndex: -1 } }, skipHistoryRecording: true };
 }

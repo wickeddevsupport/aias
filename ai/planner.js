@@ -16,12 +16,15 @@ export function buildPlan(payload) {
   const keywords = detectKeywords(text);
   const wantsCreate = keywords.add || keywords.makeA || /new\b/.test(normalizeText(text));
 
-  const wantsScene = !!(
+  let wantsScene = !!(
     keywords.scene || keywords.sunset || keywords.ocean || keywords.city || keywords.forest ||
     keywords.mountain || keywords.desert || keywords.space || keywords.studio || keywords.neon ||
     keywords.night || keywords.snow || keywords.rain || keywords.clouds || keywords.stars ||
     keywords.moon || keywords.meadow || keywords.lake || keywords.river
   );
+  if (keywords.existing && Array.isArray(existingElements) && existingElements.length > 0) {
+    wantsScene = false;
+  }
 
   const wantsCharacter = !!(keywords.character || keywords.robot || keywords.animal);
   const wantsPhoto = !!(keywords.photo || (elementToAnimate?.type === 'image' && (keywords.animate || keywords.kenBurns || keywords.parallax)));
