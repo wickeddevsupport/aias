@@ -1,4 +1,3 @@
-
 import React from 'react';
 import PropertyInput from '../../PropertyInput';
 import { SVGElementData, ImageElementProps, AnimationTrack, AnimatableProperty, AppAction } from '../../../types';
@@ -46,8 +45,15 @@ const ImagePropertiesSection: React.FC<ImagePropertiesSectionProps> = ({
         
         if (inputType === 'select' && options) {
           return (
-            <div key={key} className="mb-2 p-2.5 border border-[var(--glass-border-color)] bg-[rgba(var(--accent-rgb),0.01)] rounded-lg shadow-inner">
-              <label htmlFor={`${elementFromState.id}-${key}`} className="block text-xs font-medium text-text-secondary mb-1">{label}</label>
+            <PropertyInput
+                key={key}
+                label={label}
+                propKey={key as any}
+                value={baseValue}
+                baseValue={baseValue}
+                inputType="custom"
+                ownerId={elementFromState.id}
+            >
               <div className="relative">
                 <select
                   id={`${elementFromState.id}-${key}`}
@@ -58,21 +64,20 @@ const ImagePropertiesSection: React.FC<ImagePropertiesSectionProps> = ({
                   {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
               </div>
-            </div>
+            </PropertyInput>
           );
         }
         
         return (
-            <div key={key} className="mb-2 p-2.5 border border-[var(--glass-border-color)] bg-[rgba(var(--accent-rgb),0.01)] rounded-lg shadow-inner">
-                <label htmlFor={`${elementFromState.id}-${key}`} className="block text-xs font-medium text-text-secondary mb-1">{label}</label>
-                <input
-                    type="text"
-                    id={`${elementFromState.id}-${key}`}
-                    value={baseValue}
-                    onChange={(e) => handleStaticPropChange(key, e.target.value)}
-                    className="w-full glass-input"
-                />
-            </div>
+            <PropertyInput
+                key={key}
+                label={label}
+                propKey={key as any}
+                value={baseValue}
+                baseValue={baseValue}
+                inputType="text"
+                ownerId={elementFromState.id}
+            />
         );
       })}
     </div>

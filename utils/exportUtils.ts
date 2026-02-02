@@ -1,4 +1,5 @@
 
+
 import { SVGElementData, Animation, Artboard, RectElementProps, CircleElementProps, PathElementProps, GroupElementProps, AnySVGGradient, LinearSVGGradient, RadialSVGGradient, BezierPoint, TextElementProps, ImageElementProps } from '../types';
 import { DEFAULT_MOTION_PATH_START, DEFAULT_MOTION_PATH_END, DEFAULT_MOTION_PATH_OFFSET_X, DEFAULT_MOTION_PATH_OFFSET_Y, DEFAULT_RADIAL_CX, DEFAULT_RADIAL_CY, DEFAULT_RADIAL_R, DEFAULT_RADIAL_FX, DEFAULT_RADIAL_FY, DEFAULT_RADIAL_FR, DEFAULT_GRADIENT_ANGLE, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_TEXT_CONTENT, DEFAULT_TEXT_ANCHOR, DEFAULT_IMAGE_HREF, DEFAULT_CIRCLE_R } from '../constants';
 import { buildPathDFromStructuredPoints as buildPathDFromStructuredPointsTs } from './pathUtils'; // For static generation
@@ -16,22 +17,28 @@ const generateStaticElementMarkupRecursive = (
     const elY = element.y ?? 0;
     const elRot = element.rotation ?? 0;
     const elScale = element.scale ?? 1;
+    const elSkewX = element.skewX ?? 0;
+    const elSkewY = element.skewY ?? 0;
 
     if (element.type === 'rect') {
         const rectEl = element as RectElementProps;
         const centerX = rectEl.width / 2;
         const centerY = rectEl.height / 2;
         if (elX !== 0 || elY !== 0) localTransformParts.push(`translate(${elX}, ${elY})`);
-        if (elRot !== 0 || elScale !== 1) {
+        if (elRot !== 0 || elScale !== 1 || elSkewX !== 0 || elSkewY !== 0) {
             localTransformParts.push(`translate(${centerX}, ${centerY})`);
             if (elRot !== 0) localTransformParts.push(`rotate(${elRot})`);
             if (elScale !== 1) localTransformParts.push(`scale(${elScale})`);
+            if (elSkewX !== 0) localTransformParts.push(`skewX(${elSkewX})`);
+            if (elSkewY !== 0) localTransformParts.push(`skewY(${elSkewY})`);
             localTransformParts.push(`translate(${-centerX}, ${-centerY})`);
         }
     } else { 
         if (elX !== 0 || elY !== 0) localTransformParts.push(`translate(${elX}, ${elY})`);
         if (elRot !== 0) localTransformParts.push(`rotate(${elRot})`);
         if (elScale !== 1) localTransformParts.push(`scale(${elScale})`);
+        if (elSkewX !== 0) localTransformParts.push(`skewX(${elSkewX})`);
+        if (elSkewY !== 0) localTransformParts.push(`skewY(${elSkewY})`);
     }
     
     const localTransformString = localTransformParts.join(' ').trim();
@@ -103,6 +110,8 @@ const generateStaticElementMarkupRecursive = (
             if (text.fontSize) textAttrs += ` font-size="${text.fontSize}px"`;
             if (text.fontWeight) textAttrs += ` font-weight="${text.fontWeight}"`;
             if (text.fontStyle) textAttrs += ` font-style="${text.fontStyle}"`;
+            if (text.letterSpacing !== undefined) textAttrs += ` letter-spacing="${text.letterSpacing}"`;
+            if (text.lineHeight !== undefined) textAttrs += ` style="line-height:${text.lineHeight}"`;
             if (text.textAnchor) textAttrs += ` text-anchor="${text.textAnchor}"`;
             // dominant-baseline is complex, Konva maps to verticalAlign, not directly set in SVG export here for simplicity
             return `    <text ${textAttrs}${transformAttr}>${text.text || DEFAULT_TEXT_CONTENT}</text>\n`;
@@ -119,25 +128,27 @@ const generateStaticElementMarkupRecursive = (
     }
 };
 
-export const exportToHtml = (elements: SVGElementData[], animation: Animation, artboards: Artboard[]): string => {
-  const artboard = artboards[0]; 
+export const exportToHtml = (elements: SVGElementData[], animation: Animation, artboard: Artboard, playbackSpeed: number): string => {
   if (!artboard) {
     console.error("No artboard data provided for export.");
     return "<!-- Error: No artboard data -->";
   }
   
-  const topLevelElements = elements
+  const elementsForExport = elements.filter(el => el.id !== 'background-main');
+
+  const topLevelElements = elementsForExport
     .filter(el => el.parentId === null && el.artboardId === artboard.id)
     .sort((a,b) => a.order - b.order);
   
   const staticElementsContent = topLevelElements
-    .map(el => generateStaticElementMarkupRecursive(el.id, elements, artboard.id))
+    .map(el => generateStaticElementMarkupRecursive(el.id, elementsForExport, artboard.id))
     .join('');
   
   const animationData = {
-    elements, 
+    elements: elementsForExport,
     animation,
-    artboards
+    artboard,
+    playbackSpeed
   };
 
   const mainSvgWidth = artboard.width;
@@ -235,7 +246,7 @@ export const exportToHtml = (elements: SVGElementData[], animation: Animation, a
             else if (s.length === 5) { return { r: parseInt(s[1]+s[1],16), g: parseInt(s[2]+s[2],16), b: parseInt(s[3]+s[3],16), a: parseInt(s[4]+s[4],16)/255 }; }
             else if (s.length === 4) { return { r: parseInt(s[1]+s[1],16), g: parseInt(s[2]+s[2],16), b: parseInt(s[3]+s[3],16), a: 1 }; }
         }
-        match = s.match(/^rgba?\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*(?:,\\s*([\\d.]+}\\s*)?\\)$/);
+        match = s.match(/^rgba?\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*(?:,\\s*([\\d.]+)\\s*)?\\)$/);
         if (match) { return { r: parseInt(match[2]), g: parseInt(match[3]), b: parseInt(match[4]), a: match[5] === undefined ? 1 : parseFloat(match[5]) }; }
         const namedColors = {"black": {r:0,g:0,b:0,a:1}, "white": {r:255,g:255,b:255,a:1}, "red": {r:255,g:0,b:0,a:1}, "green": {r:0,g:128,b:0,a:1}, "blue": {r:0,g:0,b:255,a:1}, "yellow": {r:255,g:255,b:0,a:1}, "cyan": {r:0,g:255,b:255,a:1}, "magenta": {r:255,g:0,b:255,a:1}, "transparent": {r:0,g:0,b:0,a:0}, "none": {r:0,g:0,b:0,a:0}};
         if (namedColors[s]) return namedColors[s];
@@ -384,8 +395,7 @@ ${staticElementsContent}
         console.error("Animation data not found.");
         return;
       }
-      const { elements: allBaseElements, animation, artboards } = JSON.parse(animationDataElement.textContent);
-      const artboard = artboards[0];
+      const { elements: allBaseElements, animation, artboard, playbackSpeed } = JSON.parse(animationDataElement.textContent);
       const svgRoot = document.querySelector('svg.main-animation-svg');
       if (!svgRoot) {
         console.error("SVG root element not found.");
@@ -408,7 +418,12 @@ ${staticElementsContent}
 
       const tempPathForCalculations = document.createElementNS("http://www.w3.org/2000/svg", "path");
 
-      const interpolateNumeric = (v1, v2, p) => v1 + (v2 - v1) * p;
+      const interpolateNumeric = (v1, v2, p) => {
+        if (v1 === undefined && v2 === undefined) return undefined;
+        if (v1 === undefined) return p >= 0.5 ? v2 : undefined;
+        if (v2 === undefined) return p < 0.5 ? v1 : undefined;
+        return v1 + (v2 - v1) * p;
+      };
 
       const parsePercentageStringToFloat = (percentString, defaultValue) => {
           if (typeof percentString === 'string' && percentString.endsWith('%')) {
@@ -419,6 +434,112 @@ ${staticElementsContent}
           return isNaN(num) ? defaultValue : num;
       };
       const parseFloatToPercentageString = (value) => \`\${value.toFixed(2)}%\`;
+
+      const easeInSine = (t) => 1 - Math.cos((t * Math.PI) / 2);
+      const easeOutSine = (t) => Math.sin((t * Math.PI) / 2);
+      const easeInOutSine = (t) => -(Math.cos(Math.PI * t) - 1) / 2;
+      const easeInQuad = (t) => t * t;
+      const easeOutQuad = (t) => t * (2 - t);
+      const easeInOutQuad = (t) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
+      const easeInCubic = (t) => t * t * t;
+      const easeOutCubic = (t) => --t * t * t + 1;
+      const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+      const easeInQuart = (t) => t * t * t * t;
+      const easeOutQuart = (t) => 1 - --t * t * t * t;
+      const easeInOutQuart = (t) => t < 0.5 ? 8 * t * t * t * t : 1 - 8 * --t * t * t * t;
+      const easeInQuint = (t) => t * t * t * t * t;
+      const easeOutQuint = (t) => 1 + --t * t * t * t * t;
+      const easeInOutQuint = (t) => t < 0.5 ? 16 * t * t * t * t * t : 1 + 16 * --t * t * t * t * t;
+      const easeInExpo = (t) => (t === 0 ? 0 : Math.pow(2, 10 * (t - 1)));
+      const easeOutExpo = (t) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
+      const easeInOutExpo = (t) => t === 0 ? 0 : t === 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2;
+      const easeInCirc = (t) => 1 - Math.sqrt(1 - t * t);
+      const easeOutCirc = (t) => Math.sqrt(1 - --t * t);
+      const easeInOutCirc = (t) => t < 0.5 ? (1 - Math.sqrt(1 - 4 * t * t)) / 2 : (Math.sqrt(1 - (-2 * t + 2) * (-2 * t + 2)) + 1) / 2;
+      const easeInBack = (t, s = 1.70158) => t * t * ((s + 1) * t - s);
+      const easeOutBack = (t, s = 1.70158) => --t * t * ((s + 1) * t + s) + 1;
+      const easeInOutBack = (t, s = 1.70158) => (t /= 0.5) < 1 ? 0.5 * (t * t * (((s *= 1.525) + 1) * t - s)) : 0.5 * ((t -= 2) * t * (((s *= 1.525) + 1) * t + s) + 2);
+      const easeInElastic = (t, a = 1, period = 0.3) => t === 0 ? 0 : t === 1 ? 1 : -a * Math.pow(2, 10 * (t -= 1)) * Math.sin(((t - period / (2 * Math.PI) * Math.asin(1 / a)) * (2 * Math.PI)) / period);
+      const easeOutElastic = (t, a = 1, period = 0.3) => t === 0 ? 0 : t === 1 ? 1 : a * Math.pow(2, -10 * t) * Math.sin(((t - period / (2 * Math.PI) * Math.asin(1 / a)) * (2 * Math.PI)) / period) + 1;
+      const easeInOutElastic = (t, a = 1, period = 0.5) => t === 0 ? 0 : (t /= 0.5) === 2 ? 1 : t < 1 ? -0.5 * (a * Math.pow(2, 10 * (t -= 1)) * Math.sin(((t - period / (2 * Math.PI) * Math.asin(1 / a)) * (2 * Math.PI)) / period)) : a * Math.pow(2, -10 * (t -= 1)) * Math.sin(((t - period / (2 * Math.PI) * Math.asin(1 / a)) * (2 * Math.PI)) / period) * 0.5 + 1;
+      const easeOutBounce = (t) => {
+        let val = t;
+        if (val < 1 / 2.75) return 7.5625 * val * val;
+        if (val < 2 / 2.75) { val -= 1.5 / 2.75; return 7.5625 * val * val + 0.75; }
+        if (val < 2.5 / 2.75) { val -= 2.25 / 2.75; return 7.5625 * val * val + 0.9375; }
+        val -= 2.625 / 2.75;
+        return 7.5625 * val * val + 0.984375;
+      };
+      const easeInBounce = (t) => 1 - easeOutBounce(1 - t);
+      const easeInOutBounce = (t) => t < 0.5 ? easeInBounce(t * 2) * 0.5 : easeOutBounce(t * 2 - 1) * 0.5 + 0.5;
+
+      const cubicBezier = (p1x, p1y, p2x, p2y) => {
+        const newtonRaphsonIterate = (aX, aGuessT) => {
+          for (let i = 0; i < 4; ++i) {
+            const currentSlope = 3 * (1 - aGuessT) * (1 - aGuessT) * p1x + 6 * (1 - aGuessT) * aGuessT * (p2x - p1x) + 3 * aGuessT * aGuessT * (1 - p2x);
+            if (currentSlope === 0.0) return aGuessT;
+            const currentX = (1 - aGuessT) * (1 - aGuessT) * (1 - aGuessT) * 0 + 3 * (1 - aGuessT) * (1 - aGuessT) * aGuessT * p1x + 3 * (1 - aGuessT) * aGuessT * aGuessT * p2x + aGuessT * aGuessT * aGuessT * 1;
+            aGuessT -= (currentX - aX) / currentSlope;
+          }
+          return aGuessT;
+        };
+        return (t) => {
+          if (t === 0 || t === 1) return t;
+          const aGuessT = newtonRaphsonIterate(t, t);
+          return (1 - aGuessT) * (1 - aGuessT) * (1 - aGuessT) * 0 + 3 * (1 - aGuessT) * (1 - aGuessT) * aGuessT * p1y + 3 * (1 - aGuessT) * aGuessT * aGuessT * p2y + aGuessT * aGuessT * aGuessT * 1;
+        };
+      };
+
+      const applyEasing = (progress, easing) => {
+        if (!easing || easing === 'linear') return progress;
+        switch (easing) {
+          case 'easeInSine': return easeInSine(progress);
+          case 'easeOutSine': return easeOutSine(progress);
+          case 'easeInOutSine': return easeInOutSine(progress);
+          case 'easeInQuad': return easeInQuad(progress);
+          case 'easeOutQuad': return easeOutQuad(progress);
+          case 'easeInOutQuad': return easeInOutQuad(progress);
+          case 'easeInCubic': return easeInCubic(progress);
+          case 'easeOutCubic': return easeOutCubic(progress);
+          case 'easeInOutCubic': return easeInOutCubic(progress);
+          case 'easeInQuart': return easeInQuart(progress);
+          case 'easeOutQuart': return easeOutQuart(progress);
+          case 'easeInOutQuart': return easeInOutQuart(progress);
+          case 'easeInQuint': return easeInQuint(progress);
+          case 'easeOutQuint': return easeOutQuint(progress);
+          case 'easeInOutQuint': return easeInOutQuint(progress);
+          case 'easeInExpo': return easeInExpo(progress);
+          case 'easeOutExpo': return easeOutExpo(progress);
+          case 'easeInOutExpo': return easeInOutExpo(progress);
+          case 'easeInCirc': return easeInCirc(progress);
+          case 'easeOutCirc': return easeOutCirc(progress);
+          case 'easeInOutCirc': return easeInOutCirc(progress);
+          case 'easeInBack': return easeInBack(progress);
+          case 'easeOutBack': return easeOutBack(progress);
+          case 'easeInOutBack': return easeInOutBack(progress);
+          case 'easeInElastic': return easeInElastic(progress);
+          case 'easeOutElastic': return easeOutElastic(progress);
+          case 'easeInOutElastic': return easeInOutElastic(progress);
+          case 'easeInBounce': return easeInBounce(progress);
+          case 'easeOutBounce': return easeOutBounce(progress);
+          case 'easeInOutBounce': return easeInOutBounce(progress);
+          case 'step-start': return progress === 0 ? 0 : 1;
+          case 'step-end': return progress === 1 ? 1 : 0;
+          default:
+            if (easing.startsWith('cubic-bezier(')) {
+              try {
+                const paramsMatch = easing.match(/cubic-bezier\\(([^)]+)\\)/);
+                if (paramsMatch && paramsMatch[1]) {
+                  const params = paramsMatch[1].split(',').map(p => parseFloat(p.trim()));
+                  if (params.length === 4) {
+                    return cubicBezier(params[0], params[1], params[2], params[3])(progress);
+                  }
+                }
+              } catch (e) {}
+            }
+            return progress;
+        }
+      };
       
       function interpolateStopsJS(stops1, stops2, progress) {
           if (stops1.length !== stops2.length) return progress < 1 ? stops1 : stops2;
@@ -450,23 +571,42 @@ ${staticElementsContent}
           }
           return result;
       };
-
-      function interpolateValue(keyframes, time, defaultValue) {
-        if (!keyframes || keyframes.length === 0) return defaultValue;
+      function interpolateValue(keyframes, time, defaultValue, property) {
+        if (!keyframes || keyframes.length === 0) {
+          if (defaultValue === undefined && property) {
+            const numericProps = ['x', 'y', 'r', 'rx', 'ry', 'opacity', 'rotation', 'scale', 'strokeWidth', 'strokeDashoffset', 'motionPathStart', 'motionPathEnd', 'motionPathOffsetX', 'motionPathOffsetY', 'drawStartPercent', 'drawEndPercent', 'fontSize', 'letterSpacing', 'lineHeight', 'skewX', 'skewY'];
+            if (numericProps.includes(property)) {
+              if (property === 'opacity' || property === 'scale') return 1;
+              if (property === 'drawEndPercent') return 1;
+              if (property === 'fontSize') return 16;
+              return 0;
+            }
+            if (property === 'width' || property === 'height') return undefined;
+            if (property === 'text') return 'Hello';
+            if (property === 'textPath') return null;
+          }
+          return defaultValue;
+        }
         const sortedKeyframes = [...keyframes].sort((a, b) => a.time - b.time);
         if (time <= sortedKeyframes[0].time) return sortedKeyframes[0].value;
         if (time >= sortedKeyframes[sortedKeyframes.length - 1].time) return sortedKeyframes[sortedKeyframes.length - 1].value;
 
-        let prevKeyframe = sortedKeyframes[0], nextKeyframe = sortedKeyframes[0];
-        for (let i = 0; i < sortedKeyframes.length; i++) {
-          if (sortedKeyframes[i].time <= time) prevKeyframe = sortedKeyframes[i];
-          if (sortedKeyframes[i].time > time) { nextKeyframe = sortedKeyframes[i]; break; }
+        let prevKeyframe = sortedKeyframes[0];
+        let nextKeyframe = sortedKeyframes[sortedKeyframes.length - 1];
+        for (let i = 0; i < sortedKeyframes.length - 1; i++) {
+          if (sortedKeyframes[i].time <= time && sortedKeyframes[i + 1].time >= time) {
+            prevKeyframe = sortedKeyframes[i];
+            nextKeyframe = sortedKeyframes[i + 1];
+            break;
+          }
         }
-        if (prevKeyframe.time === nextKeyframe.time) return prevKeyframe.value;
+        if (time === prevKeyframe.time) return prevKeyframe.value;
+        if (time === nextKeyframe.time) return nextKeyframe.value;
         if (prevKeyframe.freeze) return prevKeyframe.value;
         const timeDiff = nextKeyframe.time - prevKeyframe.time;
         if (timeDiff === 0) return prevKeyframe.value;
-        const progress = (time - prevKeyframe.time) / timeDiff;
+        let progress = (time - prevKeyframe.time) / timeDiff;
+        progress = applyEasing(progress, prevKeyframe.easing || 'linear');
 
         const val1 = prevKeyframe.value;
         const val2 = nextKeyframe.value;
@@ -477,7 +617,7 @@ ${staticElementsContent}
         }
 
         const val1IsGradientObj = typeof val1 === 'object' && val1 !== null && 'type' in val1 && 'stops' in val1;
-        const val2IsGradientObj = typeof val2 === 'object' && val2 !== null && 'type' in val2 && 'stops' in val1;
+        const val2IsGradientObj = typeof val2 === 'object' && val2 !== null && 'type' in val2 && 'stops' in val2;
         const val1IsColorStr = typeof val1 === 'string' && !val1.startsWith('url(#') && parseColorForExport(val1);
         const val2IsColorStr = typeof val2 === 'string' && !val2.startsWith('url(#') && parseColorForExport(val2);
 
@@ -509,8 +649,8 @@ ${staticElementsContent}
                 gradientUnits: gradient2.gradientUnits || 'objectBoundingBox',
                 ...(gradient2.type === 'linearGradient' && { angle: gradient2.angle !== undefined ? gradient2.angle : ${DEFAULT_GRADIENT_ANGLE} }),
                 ...(gradient2.type === 'radialGradient' && { 
-                    cx: gradient2.cx || '${DEFAULT_RADIAL_CX}', cy: gradient2.cy || '${DEFAULT_RADIAL_CY}', r: gradient2.r || '${DEFAULT_RADIAL_R}',
-                    fx: gradient2.fx || '${DEFAULT_RADIAL_FX}', fy: gradient2.fy || '${DEFAULT_RADIAL_FY}', fr: gradient2.fr || '${DEFAULT_RADIAL_FR}',
+                    cx: gradient2.cx || '${DEFAULT_RADIAL_CX}', cy: '${DEFAULT_RADIAL_CY}', r: gradient2.r || '${DEFAULT_RADIAL_R}',
+                    fx: gradient2.fx || '${DEFAULT_RADIAL_FX}', fy: '${DEFAULT_RADIAL_FY}', fr: '${DEFAULT_RADIAL_FR}',
                 }),
             };
             return interpolateGradientJS(dummyGradient1, gradient2, progress);
@@ -522,8 +662,8 @@ ${staticElementsContent}
                 gradientUnits: gradient1.gradientUnits || 'objectBoundingBox',
                 ...(gradient1.type === 'linearGradient' && { angle: gradient1.angle !== undefined ? gradient1.angle : ${DEFAULT_GRADIENT_ANGLE} }),
                 ...(gradient1.type === 'radialGradient' && { 
-                    cx: gradient1.cx || '${DEFAULT_RADIAL_CX}', cy: gradient1.cy || '${DEFAULT_RADIAL_CY}', r: gradient1.r || '${DEFAULT_RADIAL_R}',
-                    fx: gradient1.fx || '${DEFAULT_RADIAL_FX}', fy: gradient1.fy || '${DEFAULT_RADIAL_FY}', fr: gradient1.fr || '${DEFAULT_RADIAL_FR}',
+                    cx: gradient1.cx || '${DEFAULT_RADIAL_CX}', cy: '${DEFAULT_RADIAL_CY}', r: gradient1.r || '${DEFAULT_RADIAL_R}',
+                    fx: gradient1.fx || '${DEFAULT_RADIAL_FX}', fy: '${DEFAULT_RADIAL_FY}', fr: '${DEFAULT_RADIAL_FR}',
                 }),
             };
             return interpolateGradientJS(gradient1, dummyGradient2, progress);
@@ -546,14 +686,24 @@ ${staticElementsContent}
             }
         }
         
+        if ((property === 'width' || property === 'height') && (val1 === undefined || typeof val1 === 'number') && (val2 === undefined || typeof val2 === 'number')) {
+          return interpolateNumeric(val1, val2, progress);
+        }
         if (typeof val1 === 'number' && typeof val2 === 'number') {
           return interpolateNumeric(val1, val2, progress);
         }
-        if (typeof val1 === 'string' && typeof val2 === 'string') { // For text content or non-numeric string props
-             return progress < 0.5 ? val1 : val2; // Step interpolation for text
+        if (typeof val1 === 'string' && typeof val2 === 'string' && val1.startsWith('url(#') && val2.startsWith('url(#') && val1 === val2) {
+          return val1;
         }
-        return val1; 
+        if (property === 'text' && typeof val1 === 'string' && typeof val2 === 'string') {
+          return progress < 1 ? val1 : val2;
+        }
+        if (typeof val1 === 'string' && typeof val2 === 'string') {
+          return progress < 0.5 ? val1 : val2;
+        }
+        return prevKeyframe.value; 
       };
+
 
       function getPathAngleAtProgress(pathElement, progress) {
         if (!pathElement || typeof pathElement.getTotalLength !== 'function' || typeof pathElement.getPointAtLength !== 'function') return 0;
@@ -590,7 +740,7 @@ ${staticElementsContent}
         const props = { ...baseEl, _time: currentTime };
         animation.tracks.forEach(track => {
             if (track.elementId === elementId) {
-                props[track.property] = interpolateValue(track.keyframes, currentTime, baseEl[track.property]);
+                props[track.property] = interpolateValue(track.keyframes, currentTime, baseEl[track.property], track.property);
             }
         });
         animatedElementPropsCache.set(elementId, props);
@@ -602,6 +752,8 @@ ${staticElementsContent}
         let elY = props.y !== undefined ? props.y : (baseEl.y !== undefined ? baseEl.y : 0);
         let elRotation = props.rotation !== undefined ? props.rotation : (baseEl.rotation !== undefined ? baseEl.rotation : 0);
         let elScale = props.scale !== undefined ? props.scale : (baseEl.scale !== undefined ? baseEl.scale : 1);
+        let elSkewX = props.skewX !== undefined ? props.skewX : (baseEl.skewX !== undefined ? baseEl.skewX : 0);
+        let elSkewY = props.skewY !== undefined ? props.skewY : (baseEl.skewY !== undefined ? baseEl.skewY : 0);
         let localTransformParts = [];
 
         if (baseEl.type === 'rect') {
@@ -610,21 +762,27 @@ ${staticElementsContent}
             const centerX = rectWidth / 2;
             const centerY = rectHeight / 2;
             if (elX !== 0 || elY !== 0) localTransformParts.push(\`translate(\${elX}, \${elY})\`);
-            if (elRotation !== 0 || elScale !== 1) {
+            if (elRotation !== 0 || elScale !== 1 || elSkewX !== 0 || elSkewY !== 0) {
                 localTransformParts.push(\`translate(\${centerX}, \${centerY})\`);
                 if (elRotation !== 0) localTransformParts.push(\`rotate(\${elRotation})\`);
                 if (elScale !== 1) localTransformParts.push(\`scale(\${elScale})\`);
+                if (elSkewX !== 0) localTransformParts.push(\`skewX(\${elSkewX})\`);
+                if (elSkewY !== 0) localTransformParts.push(\`skewY(\${elSkewY})\`);
                 localTransformParts.push(\`translate(\${-centerX}, \${-centerY})\`);
             }
         } else if (baseEl.type === 'text' || baseEl.type === 'image') { // Text/Image uses x, y as attributes
-            if (elRotation !== 0 || elScale !== 1) { 
+            if (elRotation !== 0 || elScale !== 1 || elSkewX !== 0 || elSkewY !== 0) { 
                 if (elRotation !== 0) localTransformParts.push(\`rotate(\${elRotation})\`);
                 if (elScale !== 1) localTransformParts.push(\`scale(\${elScale})\`);
+                if (elSkewX !== 0) localTransformParts.push(\`skewX(\${elSkewX})\`);
+                if (elSkewY !== 0) localTransformParts.push(\`skewY(\${elSkewY})\`);
             }
         } else { // Circle (Ellipse), Path, Group
             if (elX !== 0 || elY !== 0) localTransformParts.push(\`translate(\${elX}, \${elY})\`);
             if (elRotation !== 0) localTransformParts.push(\`rotate(\${elRotation})\`);
             if (elScale !== 1) localTransformParts.push(\`scale(\${elScale})\`);
+            if (elSkewX !== 0) localTransformParts.push(\`skewX(\${elSkewX})\`);
+            if (elSkewY !== 0) localTransformParts.push(\`skewY(\${elSkewY})\`);
         }
         return localTransformParts.join(' ').trim();
       };
@@ -633,12 +791,22 @@ ${staticElementsContent}
       function animateFrame(timestamp) {
         if (animationStartTime === null) animationStartTime = timestamp;
         const elapsedMs = timestamp - animationStartTime;
-        let currentTime = (elapsedMs / 1000);
+        let currentTime = (elapsedMs / 1000) * (playbackSpeed || 1.0);
         
-        let loopCount = Math.floor(currentTime / animation.duration);
-        currentTime = currentTime % animation.duration;
-        if (loopCount > 0 && animationStartTime + (loopCount * animation.duration * 1000) <= timestamp) {
-             animationStartTime += loopCount * animation.duration * 1000;
+        if (animation.duration > 0) {
+            const loopDurationMs = animation.duration * 1000 / (playbackSpeed || 1.0);
+            const loopCount = Math.floor(elapsedMs / loopDurationMs);
+            const timeInLoop = currentTime % animation.duration;
+            if (loopCount > 0) {
+                 animationStartTime += loopCount * loopDurationMs;
+            }
+            if (currentTime > 0 && timeInLoop < 0.000001) {
+              currentTime = animation.duration; // ensure final keyframe is hit
+            } else {
+              currentTime = timeInLoop;
+            }
+        } else {
+             currentTime = 0;
         }
         
         animatedElementPropsCache.clear(); 
@@ -866,6 +1034,8 @@ ${staticElementsContent}
                 if (animatedProps.fontFamily !== undefined) domElement.setAttribute('font-family', String(animatedProps.fontFamily));
                 if (animatedProps.fontWeight !== undefined) domElement.setAttribute('font-weight', String(animatedProps.fontWeight));
                 if (animatedProps.fontStyle !== undefined) domElement.setAttribute('font-style', String(animatedProps.fontStyle));
+                if (animatedProps.letterSpacing !== undefined) domElement.setAttribute('letter-spacing', String(animatedProps.letterSpacing));
+                if (animatedProps.lineHeight !== undefined) domElement.style.lineHeight = String(animatedProps.lineHeight);
                 if (animatedProps.textAnchor !== undefined) domElement.setAttribute('text-anchor', String(animatedProps.textAnchor));
                 if (animatedProps.text !== undefined) domElement.textContent = String(animatedProps.text);
             } else if (baseEl.type === 'image') {

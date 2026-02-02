@@ -1,15 +1,9 @@
 
-import { AppState, AppAction, SVGElementData, TimelineKeyframeClipboardData, Keyframe, AnimatableProperty } from '../../types';
+
+import { AppState, AppAction, SVGElementData, TimelineKeyframeClipboardData, Keyframe, AnimatableProperty, SubReducerResult } from '../../types';
 import { generateSvgStringForEditor } from '../../utils/svgGenerationUtils';
 import { generateUniqueId } from '../appContextUtils';
 import { PASTE_OFFSET, DEFAULT_KEYFRAME_EASING } from '../../constants';
-
-export interface SubReducerResult {
-    updatedStateSlice: Partial<AppState>;
-    actionDescriptionForHistory?: string; 
-    newSvgCode?: string;
-    skipHistoryRecording?: boolean; 
-}
 
 // Helper to get all descendants of a group element, including the group itself
 const getDescendantsAndSelf = (elementId: string, allElements: SVGElementData[]): SVGElementData[] => {

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ChevronUpDownIcon } from './icons/EditorIcons'; 
+import { ChevronDownIconSolid } from './icons/EditorIcons';
 
 interface AccordionGroupProps {
   title: string;
@@ -36,10 +36,10 @@ const AccordionGroup: React.FC<AccordionGroupProps> = ({
           draggable="false" 
         >
           <span className="flex-grow">{title}</span>
-          <ChevronUpDownIcon
-            size={20}
+          <ChevronDownIconSolid
+            size={16}
             className={`text-text-secondary transform transition-transform duration-200 group-hover:text-accent-color ${
-              isOpen ? 'rotate-180 text-accent-color' : ''
+              isOpen ? 'rotate-0 text-accent-color' : '-rotate-90'
             } ml-2`}
           />
         </button>

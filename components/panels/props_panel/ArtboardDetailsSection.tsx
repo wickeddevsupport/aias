@@ -1,11 +1,8 @@
-
 import React from 'react';
 import PropertyInput from '../../PropertyInput';
 import { Artboard, AppAction } from '../../../types';
 import { InformationCircleIcon } from '../../icons/EditorIcons';
 import { SLIDER_CONFIGS } from '../../../constants'; 
-
-type ArtboardEditablePropName = 'name' | 'width' | 'height' | 'backgroundColor';
 
 interface ReadOnlyInfoFieldProps {
   label: string;
@@ -19,7 +16,7 @@ const ReadOnlyInfoField: React.FC<ReadOnlyInfoFieldProps> = ({ label, value }) =
       </span>
     </div>
   );
-
+  
 interface ArtboardDetailsSectionProps {
   artboardFromState: Artboard;
   dispatch: React.Dispatch<AppAction>;
@@ -29,40 +26,89 @@ const ArtboardDetailsSection: React.FC<ArtboardDetailsSectionProps> = ({
   artboardFromState,
   dispatch,
 }) => {
-  const artboardProperties: { key: ArtboardEditablePropName; label: string; inputType: string }[] = [
-    { key: 'name', label: 'Name', inputType: 'text' },
-    { key: 'width', label: 'Width (px)', inputType: 'number' },
-    { key: 'height', label: 'Height (px)', inputType: 'number' },
+  const otherArtboardProperties: { key: 'backgroundColor'; label: string; inputType: string }[] = [
     { key: 'backgroundColor', label: 'Background Color', inputType: 'color' },
   ];
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
+      
+      {/* --- Info Section --- */}
+      <div>
         <ReadOnlyInfoField label="ID" value={artboardFromState.id} />
-        {artboardProperties.map(({ key, label, inputType }) => {
-            const currentValue = artboardFromState[key];
-            return (
+        <PropertyInput
+            key="name"
+            label="Name"
+            propKey="name"
+            value={artboardFromState.name}
+            baseValue={artboardFromState.name}
+            inputType="text"
+            ownerId={artboardFromState.id}
+            isArtboardProperty={true}
+        />
+      </div>
+
+      <hr className="border-[var(--glass-border-color)] opacity-50" />
+      
+      {/* --- Dimensions Section --- */}
+      <div>
+        <h4 className="text-xs text-text-secondary uppercase tracking-wider mb-2">Dimensions</h4>
+        <div className="space-y-1">
+            <PropertyInput
+                label="Width"
+                propKey="width"
+                value={artboardFromState.width}
+                baseValue={artboardFromState.width}
+                inputType="number"
+                ownerId={artboardFromState.id}
+                isArtboardProperty={true}
+                sliderConfig={{min:1, max: 8000, step: 1}}
+            />
+            <PropertyInput
+                label="Height"
+                propKey="height"
+                value={artboardFromState.height}
+                baseValue={artboardFromState.height}
+                inputType="number"
+                ownerId={artboardFromState.id}
+                isArtboardProperty={true}
+                sliderConfig={{min:1, max: 8000, step: 1}}
+            />
+        </div>
+      </div>
+
+      <hr className="border-[var(--glass-border-color)] opacity-50" />
+
+      {/* --- Appearance Section --- */}
+      <div>
+         <h4 className="text-xs text-text-secondary uppercase tracking-wider mb-2">Appearance</h4>
+        {otherArtboardProperties.map(({ key, label, inputType }) => (
             <PropertyInput
                 key={key}
                 label={label}
                 propKey={key}
-                value={currentValue}
-                baseValue={currentValue} 
+                value={artboardFromState[key]}
+                baseValue={artboardFromState[key]} 
                 inputType={inputType}
                 ownerId={artboardFromState.id}
                 isArtboardProperty={true}
                 sliderConfig={SLIDER_CONFIGS[key as keyof typeof SLIDER_CONFIGS]}
             />
-            );
-        })}
+        ))}
+      </div>
+      
+      <hr className="border-[var(--glass-border-color)] opacity-50" />
+
+      {/* --- Canvas Position Section --- */}
+      <div>
+         <h4 className="text-xs text-text-secondary uppercase tracking-wider mb-2">Canvas Position</h4>
         <ReadOnlyInfoField label="Canvas X (Pan)" value={artboardFromState.x.toFixed(0)} />
         <ReadOnlyInfoField label="Canvas Y (Pan)" value={artboardFromState.y.toFixed(0)} />
-
-        <div className="mt-3 p-2.5 text-xs text-text-secondary bg-[rgba(var(--accent-rgb),0.03)] rounded-lg border border-[var(--glass-border-color)]">
+        <div className="mt-2 text-xs text-text-secondary p-2 bg-[rgba(var(--accent-rgb),0.03)] rounded-md border border-[var(--glass-border-color)]">
            <InformationCircleIcon size={14} className="mr-1.5 inline-block align-middle text-accent-color opacity-80" />
-            Artboard X/Y control its canvas pan. Elements are relative to Artboard's top-left.
-            Use mouse wheel to zoom, Spacebar + Drag to pan.
+            Pan with Spacebar + Drag. Zoom with mouse wheel.
         </div>
+      </div>
     </div>
   );
 };

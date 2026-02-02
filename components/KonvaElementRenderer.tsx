@@ -6,16 +6,16 @@ import {
     SVGElementData, AnySVGGradient, InterpolatedGradientUpdateData, 
     RectElementProps, CircleElementProps, PathElementProps, GroupElementProps, TextElementProps, ImageElementProps,
     BezierPoint, AppAction, AppState, TransformableProps, OnCanvasTextEditorState
-} from '../../types';
-import { buildPathDFromStructuredPoints, getClosestTOnBezierSegment, splitBezierSegment } from '../../utils/pathUtils';
+} from '../types';
+import { buildPathDFromStructuredPoints, getClosestTOnBezierSegment, splitBezierSegment } from '../utils/pathUtils';
 import { 
     PATH_HITBOX_EXTRA_WIDTH, BEZIER_CLOSING_THRESHOLD, 
     DEFAULT_STROKE_WIDTH, DEFAULT_ELEMENT_STROKE, DEFAULT_PATH_FILL,
     DEFAULT_TEXT_CONTENT, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE, DEFAULT_FONT_WEIGHT, DEFAULT_FONT_STYLE, DEFAULT_TEXT_ANCHOR, DEFAULT_TEXT_VERTICAL_ALIGN,
     DEFAULT_IMAGE_HREF, DEFAULT_IMAGE_PRESERVE_ASPECT_RATIO, DEFAULT_CIRCLE_R, DEFAULT_TEXT_WRAP, DEFAULT_TEXT_ALIGN_KONVA
-} from '../../constants';
-import { prepareFillStrokeKonvaAttributes, parseDashArrayKonva } from '../../utils/konvaUtils';
-import { getOutermostGroupId } from '../../contexts/appContextUtils';
+} from '../constants';
+import { prepareFillStrokeKonvaAttributes, parseDashArrayKonva } from '../utils/konvaUtils';
+import { getOutermostGroupId } from '../contexts/appContextUtils';
 
 interface KonvaElementRendererProps {
   artboard: AppState['artboard'];

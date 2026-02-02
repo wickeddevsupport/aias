@@ -1,4 +1,3 @@
-
 import React from 'react';
 import PropertyInput from '../../PropertyInput';
 import { SVGElementData, AnimationTrack, AnimatableProperty, AppAction } from '../../../types';
@@ -10,7 +9,7 @@ interface MotionPathSectionProps {
   animatedElementProps: SVGElementData;
   animationTracksForSelected: AnimationTrack[];
   currentTime: number;
-  onAddKeyframe: (elementId: string, property: AnimatableProperty, value: any) => void;
+  onAddKeyframe: (property: AnimatableProperty, value: any) => void;
   onRemoveKeyframe: (elementId: string, property: AnimatableProperty, time: number) => void;
   dispatch: React.Dispatch<AppAction>;
   onStartMotionPathSelection: (elementId: string) => void;
@@ -39,7 +38,7 @@ const MotionPathSection: React.FC<MotionPathSectionProps> = ({
       <div className="flex justify-between items-center mb-1.5">
         <label className="block text-sm font-medium text-text-secondary capitalize">Path ID</label>
         <button
-          onClick={() => onAddKeyframe(elementFromState.id, 'motionPath', currentMotionPathId)}
+          onClick={() => onAddKeyframe('motionPath', currentMotionPathId)}
           title={`Add/Update Keyframe for Motion Path ID at ${currentTime.toFixed(2)}s`}
           className={`p-1.5 rounded-md ${animationTracksForSelected.find(t => t.property === 'motionPath')?.keyframes.find(kf => Math.abs(kf.time - currentTime) < 0.001) ? 'bg-accent-color text-dark-bg-primary shadow-[var(--highlight-glow)]' : 'bg-[rgba(var(--accent-rgb),0.1)] hover:bg-[rgba(var(--accent-rgb),0.2)] text-accent-color'} transition-colors`}
           aria-label="Keyframe Motion Path ID"

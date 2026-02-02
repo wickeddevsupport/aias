@@ -57,6 +57,16 @@ import {
   Shapes, 
   Tag,    
   ChevronUp, 
+  User,
+  Bot,
+  CheckCircle,
+  XCircle,
+  ArrowRightToLine,
+  Undo,
+  Redo,
+  PanelLeft,
+  PanelRight,
+  PanelBottom,
   type LucideProps
 } from 'lucide-react';
 
@@ -121,6 +131,16 @@ export const ShapesIcon = Shapes;
 export const TagIcon = Tag;     
 export const ChevronUpIcon = ChevronUp; 
 export const ChevronDownIcon = ChevronDown;
+export const UserIcon = User;
+export const BotIcon = Bot;
+export const CheckCircleIcon = CheckCircle;
+export const XCircleIcon = XCircle;
+export const PlayOnceIcon = ArrowRightToLine;
+export const UndoIcon = Undo;
+export const RedoIcon = Redo;
+export const PanelLeftIcon = PanelLeft;
+export const PanelRightIcon = PanelRight;
+export const PanelBottomIcon = PanelBottom;
 
 
 export interface IconProps extends LucideProps {}

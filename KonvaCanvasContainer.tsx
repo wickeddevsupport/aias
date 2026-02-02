@@ -83,7 +83,6 @@ const KonvaCanvasContainer = forwardRef<KonvaCanvasContainerHandles, KonvaCanvas
   const {
     currentTool, isDrawingBezierPath, isExtendingPathInfo,
     activeControlPoint, selectedBezierPointId, motionPathSelectionTargetElementId,
-    textOnPathSelectionTargetElementId,
     isDrawing: isDrawingPencil, currentDrawingPath: currentPencilPath,
     currentBezierPathData, editingKeyframeShapePreview,
   } = appContextState;
@@ -338,27 +337,29 @@ const KonvaCanvasContainer = forwardRef<KonvaCanvasContainerHandles, KonvaCanvas
 
 
   const handleKonvaPointerDownKonva = useCallback((e: Konva.KonvaEventObject<PointerEvent>, elementIdFromNodeArgument: string) => {
-    const { elements: currentElementsFromState, onCanvasTextEditor: currentEditorState, motionPathSelectionTargetElementId: currentMotionTargetId, textOnPathSelectionTargetElementId: currentTextPathTargetId } = stateRef.current;
+    const { elements: currentElementsFromState, onCanvasTextEditor: currentEditorState, motionPathSelectionTargetElementId: currentMotionTargetId } = stateRef.current;
 
-    const actualElementId = elementIdFromNodeArgument.replace('-hitbox', '').replace('-bg-hittarget','');
-    const clickedElementModel = currentElementsFromState.find(el => el.id === actualElementId);
-
-    // --- Path Assignment Logic ---
+    // --- Motion Path Assignment Logic ---
     if (currentMotionTargetId) {
+      const actualElementId = elementIdFromNodeArgument.replace('-hitbox', '').replace('-bg-hittarget','');
+      const clickedElementModel = currentElementsFromState.find(el => el.id === actualElementId);
+      
+      // Check if a valid path was clicked
       if (clickedElementModel && ['path', 'rect', 'circle'].includes(clickedElementModel.type)) {
-        dispatch({ type: 'ASSIGN_MOTION_PATH', payload: { elementId: currentMotionTargetId, pathId: clickedElementModel.id } });
-        e.evt.preventDefault(); e.cancelBubble = true; return;
+        dispatch({
+          type: 'ASSIGN_MOTION_PATH',
+          payload: { elementId: currentMotionTargetId, pathId: clickedElementModel.id }
+        });
+        e.evt.preventDefault();
+        e.cancelBubble = true;
+        return; // Prevent normal selection logic
       } else {
+        // User clicked something else, cancel selection mode
         dispatch({ type: 'SET_MOTION_PATH_SELECTION_TARGET', payload: null });
-      }
-    } else if (currentTextPathTargetId) {
-      if (clickedElementModel && ['path', 'rect', 'circle'].includes(clickedElementModel.type)) {
-        dispatch({ type: 'ASSIGN_TEXT_PATH', payload: { textElementId: currentTextPathTargetId, pathElementId: clickedElementModel.id }});
-        e.evt.preventDefault(); e.cancelBubble = true; return;
-      } else {
-        dispatch({ type: 'SET_TEXT_ON_PATH_SELECTION_TARGET', payload: null });
+        // Let the click fall through to select the new element or deselect
       }
     }
+    // --- End Motion Path Logic ---
 
 
     if (currentEditorState?.isVisible) {
@@ -407,6 +408,8 @@ const KonvaCanvasContainer = forwardRef<KonvaCanvasContainerHandles, KonvaCanvas
         activeControlPoint: currentActiveControlPoint,
     } = stateRef.current;
 
+    const actualElementId = elementIdFromNodeArgument.replace('-hitbox', '').replace('-bg-hittarget','');
+    const clickedElementModel = currentElementsFromState.find(el => el.id === actualElementId);
     const artboardRelPos = getArtboardRelativeCoords(pointerPos.x, pointerPos.y);
     const isCtrlPressedFromEvent = e.evt.ctrlKey || e.evt.metaKey;
     const targetIsBackground = actualElementId === artboardProp.id;
@@ -1106,7 +1109,7 @@ const KonvaCanvasContainer = forwardRef<KonvaCanvasContainerHandles, KonvaCanvas
                         let localClickX = artboardRelPos.x - (pathTransform.x || 0); let localClickY = artboardRelPos.y - (pathTransform.y || 0);
                         const scale = pathTransform.scale || 1; const rotation = pathTransform.rotation || 0;
                         if (scale !== 0 && scale !== 1) { localClickX /= scale; localClickY /= scale; }
-                        if (rotation !== 0) { const angleRad = -rotation * (Math.PI / 180); const cosA = Math.cos(angleRad); const sinA = Math.sin(angleRad); const rotatedX = localClickX * cosA - localClickY * sinA; const rotatedY = localClickX * sinA + tempY * cosA; localClickX = rotatedX; localClickY = rotatedY;}
+                        if (rotation !== 0) { const angleRad = -rotation * (Math.PI / 180); const cosA = Math.cos(angleRad); const sinA = Math.sin(angleRad); const rotatedX = localClickX * cosA - localClickY * sinA; const rotatedY = localClickX * sinA + localClickY * cosA; localClickX = rotatedX; localClickY = rotatedY;}
                         const stageZoom = stageRefInternal.current?.scaleX() || 1;
                         const distToFirst = Math.sqrt(Math.pow(localClickX - firstPoint.x, 2) + Math.pow(localClickY - firstPoint.y, 2));
                         if (distToFirst < BEZIER_CLOSING_THRESHOLD / stageZoom) doClosePath = true;
@@ -1280,7 +1283,6 @@ const KonvaCanvasContainer = forwardRef<KonvaCanvasContainerHandles, KonvaCanvas
           activeControlPoint={activeControlPoint}
           selectedBezierPointId={selectedBezierPointId}
           motionPathSelectionTargetElementId={motionPathSelectionTargetElementId}
-          textOnPathSelectionTargetElementId={textOnPathSelectionTargetElementId}
           editingKeyframeShapePreview={editingKeyframeShapePreview}
           isAltPressed={stateRef.current.isAltPressed}
           isCtrlPressed={stateRef.current.isCtrlPressed}

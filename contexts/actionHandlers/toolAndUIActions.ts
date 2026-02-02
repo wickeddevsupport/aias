@@ -1,18 +1,12 @@
 
 
-import { AppState, AppAction, SVGElementData, PathElementProps, AnimationTrack, OnCanvasTextEditorState, TextElementProps, CurrentTool, TimelineViewMode } from '../../types'; // Added TimelineViewMode
+import { AppState, AppAction, SVGElementData, PathElementProps, AnimationTrack, OnCanvasTextEditorState, TextElementProps, CurrentTool, TimelineViewMode, SubReducerResult, NotificationState, ActiveLeftTab } from '../../types';
 import { parseSvgString } from '../../utils/svgParsingUtils';
 import { generateSvgStringForEditor } from '../../utils/svgGenerationUtils';
-import { DEFAULT_ELEMENT_STROKE, DEFAULT_OPACITY, DEFAULT_STROKE_WIDTH, DEFAULT_MOTION_PATH_END, DEFAULT_MOTION_PATH_OFFSET_X, DEFAULT_MOTION_PATH_OFFSET_Y, DEFAULT_MOTION_PATH_START, DEFAULT_SKEW_X, DEFAULT_SKEW_Y } from '../../constants';
+import { DEFAULT_ELEMENT_STROKE, DEFAULT_OPACITY, DEFAULT_STROKE_WIDTH, DEFAULT_MOTION_PATH_END, DEFAULT_MOTION_PATH_OFFSET_X, DEFAULT_MOTION_PATH_OFFSET_Y, DEFAULT_MOTION_PATH_START, DEFAULT_SKEW_X, DEFAULT_SKEW_Y, DEFAULT_ROTATION, DEFAULT_SCALE, DEFAULT_TEXT_PATH_START_OFFSET } from '../../constants';
 import { getAllParentGroupIds } from '../appContextUtils'; 
+import { getAccumulatedTransform } from '../../utils/transformUtils';
 
-
-export interface SubReducerResult {
-    updatedStateSlice: Partial<AppState>;
-    actionDescriptionForHistory?: string;
-    newSvgCode?: string;
-    skipHistoryRecording?: boolean;
-}
 
 export function handleSetSelectedElementId(state: AppState, payload: Extract<AppAction, { type: 'SET_SELECTED_ELEMENT_ID' }>['payload']): SubReducerResult {
     let updatedSlice: Partial<AppState> = { 
@@ -79,6 +73,13 @@ export function handleSetIsPlaying(state: AppState, payload: Extract<AppAction, 
     return { updatedStateSlice: { isPlaying: payload } };
 }
 
+export function handleToggleAutoKeyframing(state: AppState): SubReducerResult {
+    return {
+        updatedStateSlice: { isAutoKeyframing: !state.isAutoKeyframing },
+        skipHistoryRecording: true,
+    };
+}
+
 export function handleSetSvgCode(state: AppState, payload: Extract<AppAction, { type: 'SET_SVG_CODE' }>['payload']): SubReducerResult {
     return { updatedStateSlice: { svgCode: payload.code, svgCodeError: payload.error || null } };
 }
@@ -125,6 +126,80 @@ export function handleSetAiError(state: AppState, payload: Extract<AppAction, { 
 export function handleSetMotionPathSelectionTarget(state: AppState, payload: Extract<AppAction, { type: 'SET_MOTION_PATH_SELECTION_TARGET' }>['payload']): SubReducerResult {
     return { updatedStateSlice: { motionPathSelectionTargetElementId: payload, textOnPathSelectionTargetElementId: null } };
 }
+
+export function handleAssignMotionPath(state: AppState, payload: Extract<AppAction, { type: 'ASSIGN_MOTION_PATH' }>['payload']): SubReducerResult {
+    const { elementId, pathId } = payload;
+    const elementIndex = state.elements.findIndex(el => el.id === elementId);
+    if (elementIndex === -1) return { updatedStateSlice: {} };
+
+    const targetElement = state.elements[elementIndex];
+    const pathElement = pathId ? state.elements.find(el => el.id === pathId) : null;
+    
+    // Build the props to update
+    const propsToUpdate: Partial<SVGElementData> = { 
+        motionPathId: pathId,
+        // Reset motion path properties to default when a new path is assigned
+        motionPathStart: DEFAULT_MOTION_PATH_START,
+        motionPathEnd: DEFAULT_MOTION_PATH_END,
+        motionPathOffsetX: DEFAULT_MOTION_PATH_OFFSET_X,
+        motionPathOffsetY: DEFAULT_MOTION_PATH_OFFSET_Y,
+    };
+    
+    if (targetElement.type === 'text') {
+        (propsToUpdate as Partial<TextElementProps>).textPathId = null; // Mutually exclusive
+    }
+
+    // If assigning a new path, snap the element to the path's origin for immediate feedback
+    // This provides a better user experience than snapping to a random point based on currentTime.
+    if (pathElement) {
+        const pathTransform = getAccumulatedTransform(pathId!, state.elements);
+        let targetX = pathTransform.x;
+        let targetY = pathTransform.y;
+
+        // The path's accumulated transform is its absolute position on the artboard.
+        // We need to calculate the target element's new *local* coordinates
+        // that will place its origin at this absolute position.
+        if (targetElement.parentId) {
+            const parentTransform = getAccumulatedTransform(targetElement.parentId, state.elements);
+            // Create a matrix for the parent's transformation
+            const parentMatrix = new DOMMatrix()
+                .translate(parentTransform.x, parentTransform.y)
+                .rotate(parentTransform.rotation)
+                .scale(parentTransform.scale);
+            
+            // Invert it to transform from world space back to the parent's local space
+            const invertedParentMatrix = parentMatrix.inverse();
+            const localPoint = new DOMPoint(targetX, targetY).matrixTransform(invertedParentMatrix);
+            
+            targetX = localPoint.x;
+            targetY = localPoint.y;
+        }
+
+        propsToUpdate.x = targetX;
+        propsToUpdate.y = targetY;
+    }
+    
+    // Create the updated element and the new elements array
+    const updatedElement = { ...targetElement, ...propsToUpdate } as SVGElementData;
+    const newElements = [...state.elements];
+    newElements[elementIndex] = updatedElement;
+    
+    const elName = updatedElement.name || elementId;
+    const pathName = pathId ? (pathElement?.name || pathId) : 'None';
+    
+    return {
+        updatedStateSlice: { 
+            elements: newElements, 
+            motionPathSelectionTargetElementId: null 
+        },
+        actionDescriptionForHistory: pathId
+            ? `Assign Motion Path '${pathName}' to ${elName}`
+            : `Clear Motion Path from ${elName}`,
+        newSvgCode: generateSvgStringForEditor(newElements, state.artboard)
+    };
+}
+
+
 export function handleSetTextOnPathSelectionTarget(state: AppState, payload: Extract<AppAction, { type: 'SET_TEXT_ON_PATH_SELECTION_TARGET' }>['payload']): SubReducerResult {
     return { updatedStateSlice: { textOnPathSelectionTargetElementId: payload, motionPathSelectionTargetElementId: null } };
 }
@@ -135,11 +210,27 @@ export function handleAssignTextPath(state: AppState, payload: Extract<AppAction
 
     const updatedElements = [...state.elements];
     const textElementToUpdate = updatedElements[textElementIndex] as TextElementProps;
+    
+    const propsToUpdate: Partial<TextElementProps> = { 
+        textPathId: pathElementId,
+        textPathStartOffset: DEFAULT_TEXT_PATH_START_OFFSET, // Reset offset when assigning new path
+    };
+    
+    // When assigning a path, reset the text's own transform as it will now be controlled by the path.
+    if (pathElementId) {
+        propsToUpdate.x = 0;
+        propsToUpdate.y = 0;
+        propsToUpdate.rotation = DEFAULT_ROTATION;
+        propsToUpdate.scale = DEFAULT_SCALE;
+        propsToUpdate.skewX = DEFAULT_SKEW_X;
+        propsToUpdate.skewY = DEFAULT_SKEW_Y;
+        propsToUpdate.motionPathId = null; // Text on path and motion path are mutually exclusive.
+    }
 
     updatedElements[textElementIndex] = {
         ...textElementToUpdate,
-        textPathId: pathElementId,
-    } as TextElementProps; // Cast to ensure type safety
+        ...propsToUpdate,
+    } as TextElementProps;
 
     const textElName = updatedElements[textElementIndex].name || textElementId;
     const pathElName = pathElementId ? (state.elements.find(el => el.id === pathElementId)?.name || pathElementId) : 'None';
@@ -332,4 +423,42 @@ export function handleUpdateOnCanvasTextEditorValue(state: AppState, payload: Ex
 
 export function handleClearNewlyAddedTextFlag(state: AppState): SubReducerResult {
     return { updatedStateSlice: { newlyAddedTextElementId: null }, skipHistoryRecording: true };
+}
+
+export function handleShowConfirmationDialog(state: AppState, payload: Extract<AppAction, { type: 'SHOW_CONFIRMATION_DIALOG' }>['payload']): SubReducerResult {
+  return {
+    updatedStateSlice: {
+      confirmationDialog: {
+        isVisible: true,
+        message: payload.message,
+        confirmButtonText: payload.confirmButtonText || 'Confirm',
+        onConfirm: payload.onConfirm,
+      }
+    },
+    skipHistoryRecording: true,
+  };
+}
+
+export function handleHideConfirmationDialog(state: AppState): SubReducerResult {
+  return { updatedStateSlice: { confirmationDialog: null }, skipHistoryRecording: true };
+}
+
+export function handleShowNewProjectDialog(state: AppState): SubReducerResult {
+  return { updatedStateSlice: { newProjectDialogVisible: true }, skipHistoryRecording: true };
+}
+
+export function handleHideNewProjectDialog(state: AppState): SubReducerResult {
+  return { updatedStateSlice: { newProjectDialogVisible: false }, skipHistoryRecording: true };
+}
+
+export function handleShowNotification(state: AppState, payload: NotificationState): SubReducerResult {
+    return { updatedStateSlice: { notification: payload }, skipHistoryRecording: true };
+}
+
+export function handleHideNotification(state: AppState): SubReducerResult {
+    return { updatedStateSlice: { notification: null }, skipHistoryRecording: true };
+}
+
+export function handleSetActiveTab(state: AppState, payload: ActiveLeftTab): SubReducerResult {
+    return { updatedStateSlice: { activeLeftTab: payload }, skipHistoryRecording: true };
 }

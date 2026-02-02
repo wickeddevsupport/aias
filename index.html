@@ -203,12 +203,12 @@
       
       /* General styling for options within ANY select dropdown for dark mode visibility */
       select option {
-        background-color: var(--dark-bg-secondary) !important; 
+        background-color: var(--dark-bg-tertiary) !important; 
         color: var(--text-primary) !important;
         padding: 8px 10px; 
       }
       select option:hover { 
-        background-color: var(--dark-bg-tertiary) !important;
+        background-color: rgba(var(--accent-rgb), 0.15) !important;
       }
       select option:checked {
         background-color: rgba(var(--accent-rgb), 0.35) !important; /* Slightly more opaque for selection */
@@ -252,6 +252,170 @@
       .on-canvas-text-editor::selection {
         background-color: var(--accent-color); 
         color: var(--dark-bg-primary);
+      }
+
+      /* Menu Bar styles */
+      .menu-bar {
+        position: relative; /* Ensure stacking context */
+        z-index: 10001; /* Above other UI panels */
+        background: rgba(25, 30, 55, 0.5); /* Semi-transparent dark bg */
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--glass-border-color);
+        padding: 0 8px;
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        height: 36px;
+        user-select: none;
+      }
+      .menu-bar-item {
+        position: relative;
+      }
+      .menu-bar-button {
+        padding: 6px 10px;
+        font-size: 0.875rem; /* 14px */
+        color: var(--text-secondary);
+        border-radius: 6px;
+        transition: all 0.15s ease-in-out;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+      }
+      .menu-bar-button:hover, .menu-bar-button.open {
+        background: rgba(var(--accent-rgb), 0.1);
+        color: var(--text-primary);
+      }
+      .dropdown-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 10002; /* Higher than menu bar itself and text editor */
+        min-width: 240px;
+        background: var(--dark-bg-secondary);
+        border: 1px solid var(--glass-border-color);
+        border-radius: 8px;
+        box-shadow: 0 8px 32px 0 var(--shadow-color-strong);
+        padding: 6px;
+        animation: fadeInDropdown 0.1s ease-out forwards;
+      }
+      @keyframes fadeInDropdown {
+        from { opacity: 0; transform: translateY(-5px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 8px 12px;
+        font-size: 0.875rem;
+        color: var(--text-primary);
+        border-radius: 6px;
+        background: none;
+        border: none;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 0.1s ease;
+      }
+      .menu-item:hover:not(:disabled) {
+        background-color: rgba(var(--accent-rgb), 0.15);
+        color: var(--accent-color);
+      }
+      .menu-item:disabled {
+        color: var(--text-placeholder);
+        cursor: not-allowed;
+      }
+      .menu-item-shortcut {
+        color: var(--text-secondary);
+        font-size: 0.75rem; /* 12px */
+        margin-left: 16px;
+      }
+      .menu-separator {
+        height: 1px;
+        background-color: var(--glass-border-color);
+        margin: 6px 0;
+      }
+
+      /* Confirmation Dialog */
+      .confirmation-overlay {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 20000; /* Extremely high z-index */
+        animation: fadeInOverlay 0.2s ease-out forwards;
+      }
+
+      @keyframes fadeInOverlay {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      .confirmation-dialog {
+        width: 100%;
+        max-width: 450px;
+        padding: 24px;
+        text-align: center;
+        animation: fadeInDialog 0.25s ease-out forwards;
+        transform: scale(0.95);
+      }
+
+      @keyframes fadeInDialog {
+        from { opacity: 0; transform: scale(0.95) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+
+      .dialog-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: var(--accent-color);
+        margin-bottom: 12px;
+      }
+
+      .dialog-message {
+        font-size: 0.95rem;
+        color: var(--text-primary);
+        margin-bottom: 24px;
+        line-height: 1.6;
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+      }
+
+      .dialog-button {
+        min-width: 120px;
+      }
+
+      .dialog-button.cancel {
+        background: rgba(100, 100, 120, 0.1);
+        border-color: rgba(100, 100, 120, 0.2);
+        color: var(--text-secondary);
+      }
+      .dialog-button.cancel:hover {
+        background: rgba(100, 100, 120, 0.2);
+        border-color: rgba(100, 100, 120, 0.4);
+        color: var(--text-primary);
+      }
+
+      .dialog-button.confirm {
+        background: rgba(var(--accent-rgb), 0.2);
+        border-color: rgba(var(--accent-rgb), 0.5);
+        color: var(--accent-color);
+        font-weight: 500;
+      }
+      .dialog-button.confirm:hover {
+        background: rgba(var(--accent-rgb), 0.3);
+        border-color: var(--accent-color);
+        box-shadow: var(--highlight-glow);
       }
 
       /* Tailwind JIT ensure these are available */

@@ -1,31 +1,30 @@
 
-
-import { AppState, AppAction } from '../types';
-import { recordToHistory, reorderSiblingsAndNormalize } from './appContextUtils';
+import { AppState, AppAction, AnySubReducerResult, RectElementProps, AppStateSnapshot, Artboard, SVGElementData } from '../types';
+import { recordToHistory, reorderSiblingsAndNormalize, generateUniqueId, getNextOrderUtil } from './appContextUtils';
 import { generateSvgStringForEditor } from '../utils/svgGenerationUtils';
+import { getInitialState } from './initialState';
 
-import { handleSetArtboardProps, SubReducerResult as ArtboardSubReducerResult } from './actionHandlers/artboardActions';
+import { handleSetArtboardProps, handleUpdateArtboardPropsContinuous } from './actionHandlers/artboardActions';
 import { 
     handleAddElement, handleAddGroup, handleUpdateElementProps, handleUpdateElementName, 
     handleDeleteElement, handleReparentElement, handleMoveElementInHierarchy, 
     handleGroupElement, handleUngroupElement, 
     handleBringToFront, handleSendToBack, handleBringForward, handleSendBackward, 
-    handleConvertToEditablePath, // Changed import alias
-    SubReducerResult as ElementSubReducerResult 
+    handleConvertToEditablePath,
 } from './actionHandlers/elementActions';
 import { 
     handleSetAnimation, handleUpdateAnimationDuration, handleAddKeyframe, handleRemoveKeyframe, 
     handleUpdateKeyframeTime, handleUpdateKeyframeProperties, handleScaleKeyframeGroupTimes, 
-    handleShiftElementAnimationTimes, handleShiftPropertyGroupTimes, // Added handleShiftPropertyGroupTimes
-    handleUpdateAnimationFromAI, SubReducerResult as AnimationSubReducerResult
+    handleShiftElementAnimationTimes, handleShiftPropertyGroupTimes,
+    handleUpdateAnimationFromAI
 } from './actionHandlers/animationActions';
+import { handleAddAsset, handleAddAssetFromLibrary, handleDeleteAsset } from './actionHandlers/assetActions';
+import { handleAddAiLog } from './actionHandlers/aiActions';
 import {
     handleStartDrawingBezierPath, handleStartExtendingBezierPath, handleAddBezierPathPoint,
     handleFinishDrawingBezierPath, handleCancelDrawingBezierPath,
     handleAddBezierPointToSegment, handleMoveBezierControlPoint, handleUpdateStructuredPoint,
-    // handleConvertToEditablePath is now in elementActions
     handleUpdateBezierPointType, handleDeleteBezierPoint,
-    SubReducerResult as BezierSubReducerResult
 } from './actionHandlers/bezierActions';
 import {
     handleSetSelectedElementId, handleSetCurrentTime, handleSetIsPlaying, handleSetSvgCode,
@@ -34,234 +33,241 @@ import {
     handleStartGradientPreview, handleStopGradientPreview,
     handleStartSolidColorPreview, handleStopSolidColorPreview, handleShowContextMenu, handleHideContextMenu,
     handleToggleGroupExpansion, handleExpandGroups, handleToggleHistoryPanel, handleSetTimelineContextItem,
-    handleSetTimelineViewMode, // Added
+    handleSetTimelineViewMode,
     handleSetCurrentTool, handleSetRenderMode, 
     handleStartDrawingPath, handleUpdateDrawingPath,
     handleSelectBezierPoint, handleSetActiveControlPoint, handleSetKeyframeShapePreview,
     handleShowOnCanvasTextEditor, handleHideOnCanvasTextEditor, handleUpdateOnCanvasTextEditorValue, 
     handleClearNewlyAddedTextFlag, handleSetKeyModifierState, 
-    handleSetPlaybackSpeed, // Added
-    SubReducerResult as ToolUISubReducerResult
+    handleSetPlaybackSpeed,
+    handleToggleAutoKeyframing,
+    handleShowConfirmationDialog,
+    handleHideConfirmationDialog,
+    handleShowNewProjectDialog,
+    handleHideNewProjectDialog,
+    handleShowNotification,
+    handleHideNotification,
+    handleSetActiveTab,
+    handleAssignMotionPath,
 } from './actionHandlers/toolAndUIActions';
 import {
     handleUndo, handleRedo, handleGoToHistoryState,
     handleCopySelectedElement, handlePasteFromClipboard,
-    handleCopyTimelineKeyframe, handlePasteTimelineKeyframe, // Added timeline clipboard actions
-    SubReducerResult as HistoryClipboardSubReducerResult
+    handleCopyTimelineKeyframe, handlePasteTimelineKeyframe,
 } from './actionHandlers/historyAndClipboardActions';
 
-// Define a union type for all possible sub-reducer results
-type AnySubReducerResult = ArtboardSubReducerResult | ElementSubReducerResult | AnimationSubReducerResult | BezierSubReducerResult | ToolUISubReducerResult | HistoryClipboardSubReducerResult;
 
-
-export const appReducer = (state: AppState, action: AppAction): AppState => {
-  let result: AnySubReducerResult | null = null;
-  let requiresNormalization = false;
-  let normalizationParentId: string | null = null;
-  let normalizationArtboardId = state.artboard.id; // Default to current artboard
-
+function getActionSubReducerResult(state: AppState, action: AppAction): AnySubReducerResult | null {
   switch (action.type) {
-    case 'SET_ARTBOARD_PROPS':
-      result = handleSetArtboardProps(state, action.payload);
-      break;
-    case 'ADD_ELEMENT':
-      result = handleAddElement(state, action.payload);
-      requiresNormalization = true;
-      const addedElInfo = (result.updatedStateSlice.elements || state.elements).find(el => el.id === result.updatedStateSlice.selectedElementId);
-      normalizationParentId = addedElInfo?.parentId || null;
-      normalizationArtboardId = addedElInfo?.artboardId || state.artboard.id;
-      // Special handling for text tool: ensure tool remains 'text' and new element is selected
-      if (action.payload.type === 'text' && action.payload.andInitiateEdit) {
-        if (!result.updatedStateSlice) result.updatedStateSlice = {};
-        result.updatedStateSlice.currentTool = 'text';
-        if(addedElInfo) result.updatedStateSlice.selectedElementId = addedElInfo.id;
-      }
-      break;
-    case 'ADD_GROUP':
-      result = handleAddGroup(state);
-      requiresNormalization = true;
-      const addedGroup = (result.updatedStateSlice.elements || state.elements).find(el => el.id === result.updatedStateSlice.selectedElementId);
-      normalizationParentId = addedGroup?.parentId || null;
-      normalizationArtboardId = addedGroup?.artboardId || state.artboard.id;
-      break;
-    case 'UPDATE_ELEMENT_PROPS':
-      result = handleUpdateElementProps(state, action.payload);
-      break;
-    case 'UPDATE_ELEMENT_NAME':
-      result = handleUpdateElementName(state, action.payload);
-      break;
-    case 'DELETE_ELEMENT':
-      result = handleDeleteElement(state, action.payload);
-      // Normalization might be needed if children of a group are deleted, but reorderSiblingsAndNormalize handles parent context
-      break;
-    case 'REPARENT_ELEMENT':
-      result = handleReparentElement(state, action.payload);
-      // handleReparentElement should internally call reorderSiblingsAndNormalize for old and new parents
-      break;
-    case 'MOVE_ELEMENT_IN_HIERARCHY':
-      result = handleMoveElementInHierarchy(state, action.payload);
-      // This handler should take care of order normalization for involved parents
-      break;
-    case 'GROUP_ELEMENT':
-      result = handleGroupElement(state, action.payload);
-      requiresNormalization = true; 
-      const groupedElNewParent = (result.updatedStateSlice.elements || state.elements).find(el => el.id === result.updatedStateSlice.selectedElementId)?.parentId;
-      normalizationParentId = groupedElNewParent !== undefined ? groupedElNewParent : null;
-      const groupedEl = (result.updatedStateSlice.elements || state.elements).find(el => el.id === result.updatedStateSlice.selectedElementId);
-      normalizationArtboardId = groupedEl?.artboardId || state.artboard.id;
-      break;
-    case 'UNGROUP_ELEMENT':
-      result = handleUngroupElement(state, action.payload);
-      requiresNormalization = true; 
-      const ungroupedGroup = state.elements.find(el => el.id === action.payload.groupId);
-      normalizationParentId = ungroupedGroup?.parentId || null;
-      normalizationArtboardId = ungroupedGroup?.artboardId || state.artboard.id;
-      break;
-    
-    // Ordering Actions
-    case 'BRING_TO_FRONT':
-      result = handleBringToFront(state, action.payload);
-      requiresNormalization = true;
-      const btfEl = state.elements.find(el => el.id === action.payload);
-      normalizationParentId = btfEl?.parentId || null;
-      normalizationArtboardId = btfEl?.artboardId || state.artboard.id;
-      break;
-    case 'SEND_TO_BACK':
-      result = handleSendToBack(state, action.payload);
-      requiresNormalization = true;
-      const stbEl = state.elements.find(el => el.id === action.payload);
-      normalizationParentId = stbEl?.parentId || null;
-      normalizationArtboardId = stbEl?.artboardId || state.artboard.id;
-      break;
-    case 'BRING_FORWARD':
-      result = handleBringForward(state, action.payload);
-      requiresNormalization = true;
-      const bfEl = state.elements.find(el => el.id === action.payload);
-      normalizationParentId = bfEl?.parentId || null;
-      normalizationArtboardId = bfEl?.artboardId || state.artboard.id;
-      break;
-    case 'SEND_BACKWARD':
-      result = handleSendBackward(state, action.payload);
-      requiresNormalization = true;
-      const sbEl = state.elements.find(el => el.id === action.payload);
-      normalizationParentId = sbEl?.parentId || null;
-      normalizationArtboardId = sbEl?.artboardId || state.artboard.id;
-      break;
+    // Artboard Actions
+    case 'SET_ARTBOARD_PROPS': return handleSetArtboardProps(state, action.payload);
+    case 'UPDATE_ARTBOARD_PROPS_CONTINUOUS': return handleUpdateArtboardPropsContinuous(state, action.payload);
+
+    // Asset Actions
+    case 'ADD_ASSET': return handleAddAsset(state, action.payload);
+    case 'DELETE_ASSET': return handleDeleteAsset(state, action.payload);
+    case 'ADD_ASSET_FROM_LIBRARY': return handleAddAssetFromLibrary(state, action.payload);
+
+    // Element Actions
+    case 'ADD_ELEMENT': return handleAddElement(state, action.payload);
+    case 'ADD_GROUP': return handleAddGroup(state);
+    case 'UPDATE_ELEMENT_PROPS': return handleUpdateElementProps(state, action.payload);
+    case 'UPDATE_ELEMENT_NAME': return handleUpdateElementName(state, action.payload);
+    case 'DELETE_ELEMENT': return handleDeleteElement(state, action.payload);
+    case 'REPARENT_ELEMENT': return handleReparentElement(state, action.payload);
+    case 'MOVE_ELEMENT_IN_HIERARCHY': return handleMoveElementInHierarchy(state, action.payload);
+    case 'GROUP_ELEMENT': return handleGroupElement(state, action.payload);
+    case 'UNGROUP_ELEMENT': return handleUngroupElement(state, action.payload);
+    case 'BRING_TO_FRONT': return handleBringToFront(state, action.payload);
+    case 'SEND_TO_BACK': return handleSendToBack(state, action.payload);
+    case 'BRING_FORWARD': return handleBringForward(state, action.payload);
+    case 'SEND_BACKWARD': return handleSendBackward(state, action.payload);
+    case 'CONVERT_TO_EDITABLE_PATH': return handleConvertToEditablePath(state, action.payload);
 
     // Animation Actions
-    case 'SET_ANIMATION': result = handleSetAnimation(state, action.payload); break;
-    case 'UPDATE_ANIMATION_DURATION': result = handleUpdateAnimationDuration(state, action.payload); break;
-    case 'ADD_KEYFRAME': result = handleAddKeyframe(state, action.payload); break;
-    case 'REMOVE_KEYFRAME': result = handleRemoveKeyframe(state, action.payload); break;
-    case 'UPDATE_KEYFRAME_TIME': result = handleUpdateKeyframeTime(state, action.payload); break;
-    case 'UPDATE_KEYFRAME_PROPERTIES': result = handleUpdateKeyframeProperties(state, action.payload); break;
-    case 'SCALE_KEYFRAME_GROUP_TIMES': result = handleScaleKeyframeGroupTimes(state, action.payload); break;
-    case 'SHIFT_ELEMENT_ANIMATION_TIMES': result = handleShiftElementAnimationTimes(state, action.payload); break; 
-    case 'SHIFT_PROPERTY_GROUP_TIMES': result = handleShiftPropertyGroupTimes(state, action.payload); break;
-    case 'UPDATE_ANIMATION_FROM_AI': result = handleUpdateAnimationFromAI(state, action.payload); break;
+    case 'SET_ANIMATION': return handleSetAnimation(state, action.payload);
+    case 'UPDATE_ANIMATION_DURATION': return handleUpdateAnimationDuration(state, action.payload);
+    case 'ADD_KEYFRAME': return handleAddKeyframe(state, action.payload);
+    case 'REMOVE_KEYFRAME': return handleRemoveKeyframe(state, action.payload);
+    case 'UPDATE_KEYFRAME_TIME': return handleUpdateKeyframeTime(state, action.payload);
+    case 'UPDATE_KEYFRAME_PROPERTIES': return handleUpdateKeyframeProperties(state, action.payload);
+    case 'SCALE_KEYFRAME_GROUP_TIMES': return handleScaleKeyframeGroupTimes(state, action.payload);
+    case 'SHIFT_ELEMENT_ANIMATION_TIMES': return handleShiftElementAnimationTimes(state, action.payload); 
+    case 'SHIFT_PROPERTY_GROUP_TIMES': return handleShiftPropertyGroupTimes(state, action.payload);
+    case 'UPDATE_ANIMATION_FROM_AI': return handleUpdateAnimationFromAI(state, action.payload);
 
     // Bezier Actions
-    case 'START_DRAWING_BEZIER_PATH': result = handleStartDrawingBezierPath(state, action.payload); break;
-    case 'START_EXTENDING_BEZIER_PATH': result = handleStartExtendingBezierPath(state, action.payload); break;
-    case 'ADD_BEZIER_PATH_POINT': result = handleAddBezierPathPoint(state, action.payload); break;
-    case 'ADD_BEZIER_POINT_TO_SEGMENT': result = handleAddBezierPointToSegment(state, action.payload); break;
-    case 'MOVE_BEZIER_CONTROL_POINT': result = handleMoveBezierControlPoint(state, action.payload); break;
-    case 'UPDATE_STRUCTURED_POINT': result = handleUpdateStructuredPoint(state, action.payload); break;
-    case 'FINISH_DRAWING_BEZIER_PATH': 
-        result = handleFinishDrawingBezierPath(state, action.payload);
-        requiresNormalization = true;
-        const finishedPath = (result.updatedStateSlice.elements || state.elements).find(el => el.id === result.updatedStateSlice.selectedElementId);
-        normalizationParentId = finishedPath?.parentId || null;
-        normalizationArtboardId = finishedPath?.artboardId || state.artboard.id;
-        break;
-    case 'CANCEL_DRAWING_BEZIER_PATH': result = handleCancelDrawingBezierPath(state); break;
-    case 'CONVERT_TO_EDITABLE_PATH': result = handleConvertToEditablePath(state, action.payload); break; // Use renamed handler
-    case 'UPDATE_BEZIER_POINT_TYPE': result = handleUpdateBezierPointType(state, action.payload); break;
-    case 'DELETE_BEZIER_POINT': result = handleDeleteBezierPoint(state, action.payload); break;
+    case 'START_DRAWING_BEZIER_PATH': return handleStartDrawingBezierPath(state, action.payload);
+    case 'START_EXTENDING_BEZIER_PATH': return handleStartExtendingBezierPath(state, action.payload);
+    case 'ADD_BEZIER_PATH_POINT': return handleAddBezierPathPoint(state, action.payload);
+    case 'ADD_BEZIER_POINT_TO_SEGMENT': return handleAddBezierPointToSegment(state, action.payload);
+    case 'MOVE_BEZIER_CONTROL_POINT': return handleMoveBezierControlPoint(state, action.payload);
+    case 'UPDATE_STRUCTURED_POINT': return handleUpdateStructuredPoint(state, action.payload);
+    case 'FINISH_DRAWING_BEZIER_PATH': return handleFinishDrawingBezierPath(state, action.payload);
+    case 'CANCEL_DRAWING_BEZIER_PATH': return handleCancelDrawingBezierPath(state);
+    case 'UPDATE_BEZIER_POINT_TYPE': return handleUpdateBezierPointType(state, action.payload);
+    case 'DELETE_BEZIER_POINT': return handleDeleteBezierPoint(state, action.payload);
 
-
-    // Tool and UI Actions
-    case 'SET_SELECTED_ELEMENT_ID': result = handleSetSelectedElementId(state, action.payload); break;
-    case 'SET_CURRENT_TIME': result = handleSetCurrentTime(state, action.payload); break;
-    case 'SET_PLAYBACK_SPEED': result = handleSetPlaybackSpeed(state, action.payload); break; // Added
-    case 'SET_IS_PLAYING': result = handleSetIsPlaying(state, action.payload); break;
-    case 'SET_SVG_CODE': result = handleSetSvgCode(state, action.payload); break;
-    case 'IMPORT_SVG_STRING': result = handleImportSvgString(state, action.payload); break;
-    case 'SET_AI_PROMPT': result = handleSetAiPrompt(state, action.payload); break;
-    case 'SET_AI_LOADING': result = handleSetAiLoading(state, action.payload); break;
-    case 'SET_AI_ERROR': result = handleSetAiError(state, action.payload); break;
-    case 'SET_MOTION_PATH_SELECTION_TARGET': result = handleSetMotionPathSelectionTarget(state, action.payload); break;
-    case 'SET_TEXT_ON_PATH_SELECTION_TARGET': result = handleSetTextOnPathSelectionTarget(state, action.payload); break;
-    case 'ASSIGN_TEXT_PATH': result = handleAssignTextPath(state, action.payload); break;
-    case 'START_GRADIENT_PREVIEW': result = handleStartGradientPreview(state, action.payload); break;
-    case 'STOP_GRADIENT_PREVIEW': result = handleStopGradientPreview(state); break;
-    case 'START_SOLID_COLOR_PREVIEW': result = handleStartSolidColorPreview(state, action.payload); break;
-    case 'STOP_SOLID_COLOR_PREVIEW': result = handleStopSolidColorPreview(state); break;
-    case 'SHOW_CONTEXT_MENU': result = handleShowContextMenu(state, action.payload); break;
-    case 'HIDE_CONTEXT_MENU': result = handleHideContextMenu(state); break;
-    case 'TOGGLE_GROUP_EXPANSION': result = handleToggleGroupExpansion(state, action.payload); break;
-    case 'EXPAND_GROUPS': result = handleExpandGroups(state, action.payload); break;
-    case 'TOGGLE_HISTORY_PANEL': result = handleToggleHistoryPanel(state); break;
-    case 'SET_TIMELINE_CONTEXT_ITEM': result = handleSetTimelineContextItem(state, action.payload); break;
-    case 'SET_TIMELINE_VIEW_MODE': result = handleSetTimelineViewMode(state, action.payload); break; // Added
-    case 'SET_CURRENT_TOOL': result = handleSetCurrentTool(state, action.payload); break;
-    case 'SET_RENDER_MODE': result = handleSetRenderMode(state, action.payload); break;
-    case 'START_DRAWING_PATH': result = handleStartDrawingPath(state, action.payload); break;
-    case 'UPDATE_DRAWING_PATH': result = handleUpdateDrawingPath(state, action.payload); break;
-    // Bezier UI specific actions
-    case 'SELECT_BEZIER_POINT': result = handleSelectBezierPoint(state, action.payload); break;
-    case 'SET_ACTIVE_CONTROL_POINT': result = handleSetActiveControlPoint(state, action.payload); break;
-    case 'SET_KEYFRAME_SHAPE_PREVIEW': result = handleSetKeyframeShapePreview(state, action.payload); break;
-    // On-Canvas Text Editor actions
-    case 'SHOW_ON_CANVAS_TEXT_EDITOR': result = handleShowOnCanvasTextEditor(state, action.payload); break;
-    case 'HIDE_ON_CANVAS_TEXT_EDITOR': result = handleHideOnCanvasTextEditor(state); break;
-    case 'UPDATE_ON_CANVAS_TEXT_EDITOR_VALUE': result = handleUpdateOnCanvasTextEditorValue(state, action.payload); break;
-    case 'CLEAR_NEWLY_ADDED_TEXT_FLAG': result = handleClearNewlyAddedTextFlag(state); break;
-    case 'SET_KEY_MODIFIER_STATE': result = handleSetKeyModifierState(state, action.payload); break;
-
-
-    // History and Clipboard Actions
-    case 'UNDO': result = handleUndo(state); break;
-    case 'REDO': result = handleRedo(state); break;
-    case 'GOTO_HISTORY_STATE': result = handleGoToHistoryState(state, action.payload); break;
-    case 'COPY_SELECTED_ELEMENT': result = handleCopySelectedElement(state); break;
-    case 'PASTE_FROM_CLIPBOARD': 
-        result = handlePasteFromClipboard(state);
-        requiresNormalization = true;
-        const pastedElRoot = (result.updatedStateSlice.elements || state.elements).find(el => el.id === result.updatedStateSlice.selectedElementId);
-        normalizationParentId = pastedElRoot?.parentId || null;
-        normalizationArtboardId = pastedElRoot?.artboardId || state.artboard.id;
-      break;
-    case 'COPY_TIMELINE_KEYFRAME': result = handleCopyTimelineKeyframe(state); break;
-    case 'PASTE_TIMELINE_KEYFRAME': result = handlePasteTimelineKeyframe(state); break;
-
+    // AI Actions
+    case 'ADD_AI_LOG': return handleAddAiLog(state, action.payload);
+    
+    // UI/Tool/State Actions
+    case 'SET_SELECTED_ELEMENT_ID': return handleSetSelectedElementId(state, action.payload);
+    case 'SET_CURRENT_TIME': return handleSetCurrentTime(state, action.payload);
+    case 'SET_PLAYBACK_SPEED': return handleSetPlaybackSpeed(state, action.payload);
+    case 'SET_LOOP_MODE': return { updatedStateSlice: { loopMode: action.payload, playbackDirection: 1 }, skipHistoryRecording: true };
+    case 'SET_PLAYBACK_DIRECTION': return { updatedStateSlice: { playbackDirection: action.payload }, skipHistoryRecording: true };
+    case 'SET_IS_PLAYING': return handleSetIsPlaying(state, action.payload);
+    case 'TOGGLE_AUTO_KEYFRAMING': return handleToggleAutoKeyframing(state);
+    case 'SET_SVG_CODE': return handleSetSvgCode(state, action.payload);
+    case 'IMPORT_SVG_STRING': return handleImportSvgString(state, action.payload);
+    case 'SET_AI_PROMPT': return handleSetAiPrompt(state, action.payload);
+    case 'SET_AI_LOADING': return handleSetAiLoading(state, action.payload);
+    case 'SET_AI_ERROR': return handleSetAiError(state, action.payload);
+    case 'SET_MOTION_PATH_SELECTION_TARGET': return handleSetMotionPathSelectionTarget(state, action.payload);
+    case 'ASSIGN_MOTION_PATH': return handleAssignMotionPath(state, action.payload);
+    case 'SET_TEXT_ON_PATH_SELECTION_TARGET': return handleSetTextOnPathSelectionTarget(state, action.payload);
+    case 'ASSIGN_TEXT_PATH': return handleAssignTextPath(state, action.payload);
+    case 'START_GRADIENT_PREVIEW': return handleStartGradientPreview(state, action.payload);
+    case 'STOP_GRADIENT_PREVIEW': return handleStopGradientPreview(state);
+    case 'START_SOLID_COLOR_PREVIEW': return handleStartSolidColorPreview(state, action.payload);
+    case 'STOP_SOLID_COLOR_PREVIEW': return handleStopSolidColorPreview(state);
+    case 'SHOW_CONTEXT_MENU': return handleShowContextMenu(state, action.payload);
+    case 'HIDE_CONTEXT_MENU': return handleHideContextMenu(state);
+    case 'TOGGLE_GROUP_EXPANSION': return handleToggleGroupExpansion(state, action.payload);
+    case 'EXPAND_GROUPS': return handleExpandGroups(state, action.payload);
+    case 'TOGGLE_HISTORY_PANEL': return handleToggleHistoryPanel(state);
+    case 'SET_TIMELINE_CONTEXT_ITEM': return handleSetTimelineContextItem(state, action.payload);
+    case 'SET_TIMELINE_VIEW_MODE': return handleSetTimelineViewMode(state, action.payload);
+    case 'SET_CURRENT_TOOL': return handleSetCurrentTool(state, action.payload);
+    case 'SET_RENDER_MODE': return handleSetRenderMode(state, action.payload);
+    case 'START_DRAWING_PATH': return handleStartDrawingPath(state, action.payload);
+    case 'UPDATE_DRAWING_PATH': return handleUpdateDrawingPath(state, action.payload);
+    case 'FINISH_DRAWING_PATH': return { updatedStateSlice: { isDrawing: false, currentDrawingPath: null } }; // Finish is handled in the main reducer
+    case 'SELECT_BEZIER_POINT': return handleSelectBezierPoint(state, action.payload);
+    case 'SET_ACTIVE_CONTROL_POINT': return handleSetActiveControlPoint(state, action.payload);
+    case 'SET_KEYFRAME_SHAPE_PREVIEW': return handleSetKeyframeShapePreview(state, action.payload);
+    case 'SHOW_ON_CANVAS_TEXT_EDITOR': return handleShowOnCanvasTextEditor(state, action.payload);
+    case 'HIDE_ON_CANVAS_TEXT_EDITOR': return handleHideOnCanvasTextEditor(state);
+    case 'UPDATE_ON_CANVAS_TEXT_EDITOR_VALUE': return handleUpdateOnCanvasTextEditorValue(state, action.payload);
+    case 'CLEAR_NEWLY_ADDED_TEXT_FLAG': return handleClearNewlyAddedTextFlag(state);
+    case 'SET_KEY_MODIFIER_STATE': return handleSetKeyModifierState(state, action.payload);
+    case 'UNDO': return handleUndo(state);
+    case 'REDO': return handleRedo(state);
+    case 'GOTO_HISTORY_STATE': return handleGoToHistoryState(state, action.payload);
+    case 'COPY_SELECTED_ELEMENT': return handleCopySelectedElement(state);
+    case 'PASTE_FROM_CLIPBOARD': return handlePasteFromClipboard(state);
+    case 'COPY_TIMELINE_KEYFRAME': return handleCopyTimelineKeyframe(state);
+    case 'PASTE_TIMELINE_KEYFRAME': return handlePasteTimelineKeyframe(state);
+    case 'SHOW_CONFIRMATION_DIALOG': return handleShowConfirmationDialog(state, action.payload);
+    case 'HIDE_CONFIRMATION_DIALOG': return handleHideConfirmationDialog(state);
+    case 'SHOW_NEW_PROJECT_DIALOG': return handleShowNewProjectDialog(state);
+    case 'HIDE_NEW_PROJECT_DIALOG': return handleHideNewProjectDialog(state);
+    case 'SHOW_NOTIFICATION': return handleShowNotification(state, action.payload);
+    case 'HIDE_NOTIFICATION': return handleHideNotification(state);
+    case 'SET_ACTIVE_TAB': return handleSetActiveTab(state, action.payload);
+    
+    // EXECUTE_AI_ACTIONS_BATCH is handled specially in the main reducer.
     default:
-      return state;
+      return null;
   }
+}
+
+export const appReducer = (state: AppState, action: AppAction): AppState => {
+  if (action.type === 'EXECUTE_AI_ACTIONS_BATCH') {
+    let currentState = { ...state };
+    const actions = action.payload.actions as AppAction[];
+
+    for (const subAction of actions) {
+      const tempResult = getActionSubReducerResult(currentState, subAction);
+      if (tempResult) {
+        currentState = { ...currentState, ...tempResult.updatedStateSlice };
+      }
+    }
+    const historyUpdate = recordToHistory(
+      state.history,
+      state.historyIndex,
+      currentState, // Use the final accumulated state for the snapshot
+      action.payload.log // The log message for the whole batch
+    );
+    return {
+      ...currentState,
+      ...historyUpdate,
+      svgCode: generateSvgStringForEditor(currentState.elements, currentState.artboard),
+      svgCodeError: null,
+    };
+  }
+
+  if (action.type === 'NEW_PROJECT') {
+    const { width, height } = (action as Extract<AppAction, { type: 'NEW_PROJECT' }>).payload;
+    const baseDefaults = getInitialState();
+    const newArtboardId = generateUniqueId('artboard');
+    
+    const blankArtboard: Artboard = { 
+      ...baseDefaults.artboard, 
+      id: newArtboardId,
+      name: `New Artboard`,
+      width: width, 
+      height: height,
+      defs: { gradients: [], filters: [], clipPaths: [], masks: [] } 
+    };
+    
+    const blankElements: SVGElementData[] = [];
+
+    const blankState: AppState = {
+        ...baseDefaults, 
+        artboard: blankArtboard, 
+        elements: blankElements, 
+        animation: { duration: 20, tracks: [] },
+        assets: [], 
+        selectedElementId: blankArtboard.id,
+        svgCode: generateSvgStringForEditor(blankElements, blankArtboard), 
+        svgCodeError: null,
+        aiLogs: [], 
+        aiPrompt: '', 
+        history: [], 
+        historyIndex: -1,
+        clipboard: null, 
+        timelineKeyframeClipboard: null, 
+        expandedGroupIds: new Set(),
+        confirmationDialog: null,
+        newProjectDialogVisible: false,
+    };
+    const firstSnapshot: AppStateSnapshot = {
+        artboard: blankState.artboard, 
+        elements: blankState.elements, 
+        animation: blankState.animation,
+        selectedElementId: blankState.selectedElementId, 
+        currentTime: 0, 
+        playbackSpeed: 1.0,
+        loopMode: 'once', 
+        playbackDirection: 1, 
+        actionDescription: 'New Project'
+    };
+    blankState.history = [firstSnapshot];
+    blankState.historyIndex = 0;
+    return blankState;
+  }
+  
+  // Handle single actions
+  const result = getActionSubReducerResult(state, action);
 
   if (result) {
     let newState = { ...state, ...result.updatedStateSlice };
-
-    if (requiresNormalization && newState.elements) {
-        newState.elements = reorderSiblingsAndNormalize(newState.elements, normalizationParentId, normalizationArtboardId);
-        if (result.newSvgCode === undefined) { 
-            newState.svgCode = generateSvgStringForEditor(newState.elements, newState.artboard);
-            newState.svgCodeError = null;
-        }
+    
+    if (action.type === 'FINISH_DRAWING_PATH' && state.currentDrawingPath) {
+        const newPath = { ...state.currentDrawingPath, id: generateUniqueId('path'), order: getNextOrderUtil(state.elements, null, state.artboard.id) };
+        newState.elements = [...state.elements, newPath];
+        newState.selectedElementId = newPath.id;
+        result.actionDescriptionForHistory = `Create Pencil Path`;
+        result.newSvgCode = generateSvgStringForEditor(newState.elements, newState.artboard);
     }
     
     if (result.actionDescriptionForHistory && !result.skipHistoryRecording) {
       const historyUpdate = recordToHistory(
         state.history,
         state.historyIndex,
-        {
-          artboard: newState.artboard,
-          elements: newState.elements,
-          animation: newState.animation,
-          selectedElementId: newState.selectedElementId,
-          currentTime: newState.currentTime,
-          playbackSpeed: newState.playbackSpeed, // Added playbackSpeed to snapshot payload
-        },
+        newState,
         result.actionDescriptionForHistory
       );
       newState = { ...newState, ...historyUpdate };
@@ -273,6 +279,5 @@ export const appReducer = (state: AppState, action: AppAction): AppState => {
     }
     return newState;
   }
-
   return state;
 };

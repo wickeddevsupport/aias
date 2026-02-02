@@ -51,7 +51,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
   const currentBezierKonvaPathRef = useRef<Konva.Path | null>(null);
   const currentBezierKonvaHandlesGroupRef = useRef<Konva.Group | null>(null);
   const selectedBezierKonvaHandlesGroupRef = useRef<Konva.Group | null>(null);
-  const ghostPathKonvaNodeRef = useRef<Konva.Path | null>(null);
+  const ghostPathKonvaNodeRef = useRef<Konva.Path | null>(null); // Ghost path can still be on effectsLayer
 
 
   useEffect(() => {
@@ -67,17 +67,17 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
       const zoom = stageScale > 0 ? stageScale : 1;
       const finalStrokeWidth = (baseStrokeWidth * GHOST_PATH_STROKE_WIDTH_FACTOR) / zoom;
       
-      const artboardOffsetX = state.artboard.x || 0;
+      const artboardOffsetX = state.artboard.x || 0; // Get artboard offset from context state
       const artboardOffsetY = state.artboard.y || 0;
 
       currentPencilKonvaPathRef.current.setAttrs({
           data: pd.d as string, 
-          x: (Number.isFinite(pd.x) ? pd.x : 0) + artboardOffsetX, 
+          x: (Number.isFinite(pd.x) ? pd.x : 0) + artboardOffsetX, // Position relative to stage
           y: (Number.isFinite(pd.y) ? pd.y : 0) + artboardOffsetY,
           stroke: pd.stroke as string || DEFAULT_ELEMENT_STROKE, strokeWidth: finalStrokeWidth,
           opacity: Number.isFinite(pd.opacity) ? pd.opacity : GHOST_PATH_OPACITY,
           dash: parseDashArrayKonva(pd.strokeDasharray), fillEnabled: false,
-          rotation: 0, scaleX: 1, scaleY: 1, 
+          rotation: 0, scaleX: 1, scaleY: 1, // Pencil paths are drawn directly, no extra transform
       });
       currentPencilKonvaPathRef.current.moveToTop();
     } else {
@@ -92,19 +92,31 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
     if (!effectsLayer) return;
     const zoom = stageScale > 0 ? stageScale : 1;
 
-    // Cleanup logic remains the same
-    if (currentBezierKonvaPathRef.current) { currentBezierKonvaPathRef.current.destroy(); currentBezierKonvaPathRef.current = null; }
-    if (currentBezierKonvaHandlesGroupRef.current) { currentBezierKonvaHandlesGroupRef.current.destroy(); currentBezierKonvaHandlesGroupRef.current = null; }
+    // Cleanup previously drawn "drawing" path and its handles
+    if (currentBezierKonvaPathRef.current) {
+      currentBezierKonvaPathRef.current.destroy();
+      currentBezierKonvaPathRef.current = null;
+    }
+    if (currentBezierKonvaHandlesGroupRef.current) {
+      currentBezierKonvaHandlesGroupRef.current.destroy();
+      currentBezierKonvaHandlesGroupRef.current = null;
+    }
+     // Cleanup previously drawn "selected" path handles (distinct from drawing handles)
     if (selectedBezierKonvaHandlesGroupRef.current) {
         const oldLayer = selectedBezierKonvaHandlesGroupRef.current.getLayer();
         selectedBezierKonvaHandlesGroupRef.current.destroy();
         selectedBezierKonvaHandlesGroupRef.current = null;
-        oldLayer?.batchDraw();
+        oldLayer?.batchDraw(); // Draw immediately if it was on a different layer (main layer)
     }
-    if (ghostPathKonvaNodeRef.current) { ghostPathKonvaNodeRef.current.destroy(); ghostPathKonvaNodeRef.current = null; }
+    // Cleanup ghost path
+    if (ghostPathKonvaNodeRef.current) {
+        ghostPathKonvaNodeRef.current.destroy();
+        ghostPathKonvaNodeRef.current = null;
+    }
+
 
     let activePathDataForRendering: PathElementProps | null = null;
-    let konvaParentForHandles: Konva.Group | null = null;
+    let konvaParentForHandles: Konva.Group | null = null; // The Konva group that will contain the handles
     let isDrawingOrExtendingThisPath = false;
     const artboardOffsetX = state.artboard.x || 0;
     const artboardOffsetY = state.artboard.y || 0;
@@ -114,6 +126,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
         activePathDataForRendering = currentBezierPathData;
         isDrawingOrExtendingThisPath = true;
 
+        // Render the path preview itself on the effects layer.
         currentBezierKonvaPathRef.current = new Konva.Path({ 
             data: buildPathDFromStructuredPoints(activePathDataForRendering.structuredPoints, activePathDataForRendering.closedByJoining),
             x: (Number.isFinite(activePathDataForRendering.x) ? activePathDataForRendering.x : 0) + artboardOffsetX,
@@ -133,6 +146,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
         effectsLayer.add(currentBezierKonvaPathRef.current);
         currentBezierKonvaPathRef.current.moveToTop();
 
+        // Handles will be parented to a group on the effects layer, transformed like the path preview.
         currentBezierKonvaHandlesGroupRef.current = new Konva.Group({ 
             id: `drawing-handles-${activePathDataForRendering.id}`,
             name: 'drawing-handles-group',
@@ -169,7 +183,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
         } else if (animatedPathFromProps && Array.isArray(animatedPathFromProps.d)) {
             activePathDataForRendering = { ...animatedPathFromProps, structuredPoints: animatedPathFromProps.d as BezierPoint[] };
         } else if (baseRawPathFromState?.structuredPoints) {
-            activePathDataForRendering = { ...animatedPathFromProps, ...baseRawPathFromState };
+            activePathDataForRendering = { ...baseRawPathFromState, ...animatedPathFromProps };
         }
         
         if (activePathDataForRendering) {
@@ -179,6 +193,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
                 (konvaNodeForSelectedPath.getParent() as Konva.Group).add(selectedBezierKonvaHandlesGroupRef.current);
                 konvaParentForHandles = selectedBezierKonvaHandlesGroupRef.current;
                 
+                // Match the transform of the actual path node. Handles drawn in path's local space.
                 konvaParentForHandles.setAttrs({
                     x: konvaNodeForSelectedPath.x(), y: konvaNodeForSelectedPath.y(),
                     rotation: konvaNodeForSelectedPath.rotation(),
@@ -219,9 +234,15 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
         linesToAdd.forEach(line => konvaParentForHandles!.add(line));
         handleCirclesToAdd.forEach(circle => konvaParentForHandles!.add(circle));
         anchorCirclesToAdd.forEach(circle => konvaParentForHandles!.add(circle));
-        konvaParentForHandles!.children?.forEach(child => { if (child.name()?.startsWith('anchor-')) child.moveToTop(); });
+        
+        // This logic is important for z-index of handles
+        konvaParentForHandles!.children?.filter(c => c.name().startsWith('line-')).forEach(c => c.moveToBottom());
+        konvaParentForHandles!.children?.filter(c => c.name().startsWith('handle-')).forEach(c => c.moveToTop());
+        konvaParentForHandles!.children?.filter(c => c.name().startsWith('anchor-')).forEach(c => c.moveToTop());
+        
         konvaParentForHandles!.moveToTop();
 
+        // Add closing indicator for the path being actively drawn/extended if applicable
         if (isDrawingOrExtendingThisPath && activePathDataForRendering.structuredPoints.length > 1 && !activePathDataForRendering.closedByJoining) {
             const firstPoint = activePathDataForRendering.structuredPoints[0];
             const closingIndicator = new Konva.Circle({
@@ -235,7 +256,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
         }
     }
 
-    // Ghost path logic
+    // Ghost path logic (if extending an existing path, or editing keyframe shape for an existing path)
     const shouldShowGhost = (isExtendingPathInfo && isExtendingPathInfo.originalPathId === selectedElementId) ||
                            (editingKeyframeShapePreview && editingKeyframeShapePreview.pathId === selectedElementId);
 

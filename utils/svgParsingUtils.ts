@@ -1,4 +1,3 @@
-
 // utils/svgParsingUtils.ts
 
 /**
@@ -258,6 +257,36 @@ function decomposeMatrix(matrix: DOMMatrix): { x: number; y: number; rotation: n
     };
 }
 
+function parseClipPathElement(clipPathNode: Element): Omit<ClipPathDef, 'id' | 'rawContent'> | null {
+    const clipPathUnits = clipPathNode.getAttribute('clipPathUnits') as ClipPathDef['clipPathUnits'] || 'userSpaceOnUse';
+    const parsedClipShapes: ParsedClipShape[] = [];
+    Array.from(clipPathNode.children).forEach(clipShapeNode => {
+        const clipShapeTag = clipShapeNode.tagName.toLowerCase();
+        let type: ParsedClipShape['type'] | undefined;
+        if (clipShapeTag === 'circle') type = 'circle';
+        else if (clipShapeTag === 'rect') type = 'rect';
+        else if (clipShapeTag === 'ellipse') type = 'ellipse';
+        else if (clipShapeTag === 'path') type = 'path';
+
+        if (type) {
+            const attrs: Record<string, string | number> = {};
+            // Common attributes
+            ['cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'width', 'height', 'd'].forEach(attrName => {
+                const val = clipShapeNode.getAttribute(attrName);
+                if (val !== null) {
+                    const numVal = parseFloat(val);
+                    attrs[attrName] = (isNaN(numVal) || !isFinite(numVal) || val.endsWith('%')) ? val : numVal;
+                }
+            });
+            const transform = clipShapeNode.getAttribute('transform');
+            if (transform) attrs['transform'] = transform;
+
+            parsedClipShapes.push({ type, attrs });
+        }
+    });
+    return { clipPathUnits, parsedShapes: parsedClipShapes };
+}
+
 export const parseSvgString = (
   svgString: string, defaultArtboardId: string
 ): { elements: SVGElementData[]; artboardOverrides?: Partial<Artboard>; warnings: string[] } => {
@@ -335,35 +364,10 @@ export const parseSvgString = (
         break;
       case 'filter': defsContainer.filters.push({ id, rawContent: defChild.innerHTML }); break;
       case 'clippath':
-        const clipPathUnits = defChild.getAttribute('clipPathUnits') as ClipPathDef['clipPathUnits'] || 'userSpaceOnUse';
-        const parsedClipShapes: ParsedClipShape[] = [];
-        Array.from(defChild.children).forEach(clipShapeNode => {
-            const clipShapeTag = clipShapeNode.tagName.toLowerCase();
-            let type: ParsedClipShape['type'] | undefined;
-            if (clipShapeTag === 'circle') type = 'circle';
-            else if (clipShapeTag === 'rect') type = 'rect';
-            else if (clipShapeTag === 'ellipse') type = 'ellipse';
-            else if (clipShapeTag === 'path') type = 'path';
-
-            if (type) {
-                const attrs: Record<string, string | number> = {};
-                // Common attributes
-                ['cx', 'cy', 'r', 'rx', 'ry', 'x', 'y', 'width', 'height', 'd'].forEach(attrName => {
-                    const val = clipShapeNode.getAttribute(attrName);
-                    if (val !== null) {
-                         // Attempt to parse as number if it looks like one, otherwise store as string
-                        const numVal = parseFloat(val);
-                        attrs[attrName] = (isNaN(numVal) || !isFinite(numVal) || val.endsWith('%')) ? val : numVal;
-                    }
-                });
-                 // Add transform if present on the clip shape itself
-                const transform = clipShapeNode.getAttribute('transform');
-                if (transform) attrs['transform'] = transform;
-
-                parsedClipShapes.push({ type, attrs });
-            }
-        });
-        defsContainer.clipPaths.push({ id, rawContent: defChild.innerHTML, clipPathUnits, parsedShapes: parsedClipShapes });
+        const parsedClipData = parseClipPathElement(defChild);
+        if (parsedClipData) {
+            defsContainer.clipPaths.push({ id, rawContent: defChild.innerHTML, ...parsedClipData });
+        }
         break;
       case 'mask': defsContainer.masks.push({ id, rawContent: defChild.innerHTML }); break;
       case 'symbol': defsContainer.symbols[id] = defChild; break;
@@ -373,6 +377,22 @@ export const parseSvgString = (
 
   const processNode = (node: Element, parentNetMatrix: DOMMatrix, parentId: string | null, orderInParent: number): void => {
     const tagName = node.tagName.toLowerCase();
+    
+    if (tagName === 'clippath') {
+        const id = node.getAttribute('id');
+        if (id) {
+            if (!defsContainer.clipPaths.find(cp => cp.id === id)) {
+                const parsedClipData = parseClipPathElement(node);
+                if (parsedClipData) {
+                    defsContainer.clipPaths.push({ id, rawContent: node.innerHTML, ...parsedClipData });
+                }
+            }
+        } else {
+            warnings.push(`Skipped <clipPath> without an id.`);
+        }
+        return;
+    }
+
     if (['defs', 'style', 'title', 'desc', 'metadata'].includes(tagName)) return;
     const display = getResolvedStyleValue(node, 'display', 'display', cssMap, node.parentElement || undefined);
     const visibility = getResolvedStyleValue(node, 'visibility', 'visibility', cssMap, node.parentElement || undefined);

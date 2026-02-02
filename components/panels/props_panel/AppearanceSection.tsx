@@ -1,4 +1,3 @@
-
 import React from 'react';
 import PropertyInput from '../../PropertyInput';
 import { SVGElementData, AnimationTrack, AnimatableProperty, AppAction, AnySVGGradient } from '../../../types';
@@ -9,7 +8,7 @@ interface AppearanceSectionProps {
   animatedElementProps: SVGElementData;
   animationTracksForSelected: AnimationTrack[];
   currentTime: number;
-  onAddKeyframe: (elementId: string, property: AnimatableProperty, value: any) => void;
+  onAddKeyframe: (property: AnimatableProperty, value: any) => void;
   onRemoveKeyframe: (elementId: string, property: AnimatableProperty, time: number) => void;
   dispatch: React.Dispatch<AppAction>;
 }

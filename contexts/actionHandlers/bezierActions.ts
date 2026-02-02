@@ -1,18 +1,12 @@
 
-import { AppState, AppAction, PathElementProps, BezierPoint, AnimatableProperty, AccumulatedTransform, SVGElementData, Keyframe, RectElementProps, CircleElementProps, AnimationTrack, ParsedDStringResult } from '../../types';
+
+import { AppState, AppAction, PathElementProps, BezierPoint, AnimatableProperty, AccumulatedTransform, SVGElementData, Keyframe, RectElementProps, CircleElementProps, AnimationTrack, ParsedDStringResult, SubReducerResult } from '../../types';
 import { generateUniqueId, getNextOrderUtil } from '../appContextUtils';
 import { buildPathDFromStructuredPoints, rectToPathStructuredPoints, circleToPathStructuredPoints, generatePointId, parseDStringToStructuredPoints } from '../../utils/pathUtils';
 import { DEFAULT_MOTION_PATH_START, DEFAULT_MOTION_PATH_END, DEFAULT_MOTION_PATH_OFFSET_X, DEFAULT_MOTION_PATH_OFFSET_Y, DEFAULT_PATH_FILL, DEFAULT_ELEMENT_STROKE, DEFAULT_STROKE_WIDTH, DEFAULT_OPACITY, DEFAULT_ROTATION, DEFAULT_SCALE, DEFAULT_KEYFRAME_EASING, DEFAULT_SKEW_X, DEFAULT_SKEW_Y } from '../../constants';
 import { getAccumulatedTransform } from '../../utils/transformUtils';
 import { generateSvgStringForEditor } from '../../utils/svgGenerationUtils';
 
-
-export interface SubReducerResult {
-    updatedStateSlice: Partial<AppState>;
-    actionDescriptionForHistory?: string;
-    newSvgCode?: string;
-    skipHistoryRecording?: boolean;
-}
 
 const autoKeyframePathD = (
     state: AppState,

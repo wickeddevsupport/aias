@@ -1,19 +1,19 @@
-
 import React, { useContext } from 'react';
 import PropertyInput from '../../PropertyInput';
 import { SVGElementData, TextElementProps, AnimationTrack, AnimatableProperty, AppAction } from '../../../types';
 import { AppContext } from '../../../contexts/AppContext';
 import { KeyframeIcon, TrashIcon, PathIcon as SelectPathIcon } from '../../icons/EditorIcons';
+import { MOTION_PATH_SEGMENT_CONFIG, DEFAULT_TEXT_PATH_START_OFFSET } from '../../../constants';
 
 interface TextOnPathSectionProps {
   elementFromState: TextElementProps;
   animatedElementProps: TextElementProps;
   animationTracksForSelected: AnimationTrack[];
   currentTime: number;
-  onAddKeyframe: (elementId: string, property: AnimatableProperty, value: any) => void;
+  onAddKeyframe: (property: AnimatableProperty, value: any) => void;
   onRemoveKeyframe: (elementId: string, property: AnimatableProperty, time: number) => void;
   dispatch: React.Dispatch<AppAction>;
-  availablePathSources: SVGElementData[];
+  availableMotionPathSources: SVGElementData[];
 }
 
 const TextOnPathSection: React.FC<TextOnPathSectionProps> = ({
@@ -24,7 +24,7 @@ const TextOnPathSection: React.FC<TextOnPathSectionProps> = ({
   onAddKeyframe,
   onRemoveKeyframe,
   dispatch,
-  availablePathSources,
+  availableMotionPathSources,
 }) => {
   const { state } = useContext(AppContext);
   const { textOnPathSelectionTargetElementId } = state;
@@ -32,7 +32,7 @@ const TextOnPathSection: React.FC<TextOnPathSectionProps> = ({
   const currentTextPathId = animatedElementProps.textPathId || elementFromState.textPathId || '';
   const isSelectingPathForThisText = textOnPathSelectionTargetElementId === elementFromState.id;
   
-  const actualAvailablePaths = availablePathSources.filter(el => el.type === 'path');
+  const actualAvailablePaths = availableMotionPathSources.filter(el => ['path', 'rect', 'circle'].includes(el.type));
 
   const handleStartPathSelection = () => {
     dispatch({ type: 'SET_TEXT_ON_PATH_SELECTION_TARGET', payload: elementFromState.id });
@@ -47,7 +47,7 @@ const TextOnPathSection: React.FC<TextOnPathSectionProps> = ({
       <div className="flex justify-between items-center mb-1.5">
         <label className="block text-sm font-medium text-text-secondary capitalize">Path ID</label>
         <button
-          onClick={() => onAddKeyframe(elementFromState.id, 'textPath', currentTextPathId)}
+          onClick={() => onAddKeyframe('textPath', currentTextPathId)}
           title={`Add/Update Keyframe for Text Path ID at ${currentTime.toFixed(2)}s`}
           className={`p-1.5 rounded-md ${animationTracksForSelected.find(t => t.property === 'textPath')?.keyframes.find(kf => Math.abs(kf.time - currentTime) < 0.001) ? 'bg-accent-color text-dark-bg-primary shadow-[var(--highlight-glow)]' : 'bg-[rgba(var(--accent-rgb),0.1)] hover:bg-[rgba(var(--accent-rgb),0.2)] text-accent-color'} transition-colors`}
           aria-label="Keyframe Text Path ID"
@@ -73,7 +73,7 @@ const TextOnPathSection: React.FC<TextOnPathSectionProps> = ({
         <SelectPathIcon size={16} className="mr-2" />
         {isSelectingPathForThisText ? "Selecting..." : (actualAvailablePaths.length === 0 ? "No Paths Available" : "Select Path on Canvas")}
       </button>
-      {isSelectingPathForThisText && <p className="text-xs text-accent-color text-center opacity-80">Click a path element on the canvas.</p>}
+      {isSelectingPathForThisText && <p className="text-xs text-accent-color text-center opacity-80">Click a path, rectangle, or circle on the canvas.</p>}
       
       {animationTracksForSelected.find(t => t.property === 'textPath')?.keyframes.map(kf => (
         <div key={`tp-kf-${kf.time}`} className={`flex justify-between items-center text-xs p-1 rounded-md ${Math.abs(kf.time - currentTime) < 0.001 ? 'bg-[rgba(var(--accent-rgb),0.15)] text-accent-color' : 'bg-[rgba(var(--accent-rgb),0.03)] text-text-secondary'}`}>
@@ -83,8 +83,25 @@ const TextOnPathSection: React.FC<TextOnPathSectionProps> = ({
           </button>
         </div>
       ))}
+       <div className="mt-2 pt-2 border-t border-[var(--glass-border-color)]">
+        <PropertyInput
+          key="textPathStartOffset"
+          label="Start Offset"
+          propKey="textPathStartOffset"
+          value={animatedElementProps.textPathStartOffset ?? elementFromState.textPathStartOffset ?? DEFAULT_TEXT_PATH_START_OFFSET}
+          baseValue={elementFromState.textPathStartOffset ?? DEFAULT_TEXT_PATH_START_OFFSET}
+          inputType="number"
+          ownerId={elementFromState.id}
+          onAddKeyframe={onAddKeyframe}
+          track={animationTracksForSelected.find(t => t.property === 'textPathStartOffset')}
+          currentTime={currentTime}
+          onRemoveKeyframe={onRemoveKeyframe}
+          sliderConfig={MOTION_PATH_SEGMENT_CONFIG}
+          isDisabledByParent={!currentTextPathId}
+        />
+       </div>
        <p className="text-xs text-text-secondary mt-1 p-2 bg-[rgba(var(--accent-rgb),0.03)] rounded-md border border-[var(--glass-border-color)]">
-        Note: Text on path ignores its X, Y, Rotation, and Scale.
+        Note: Text on path ignores its X, Y, and Rotation properties.
       </p>
     </div>
   );

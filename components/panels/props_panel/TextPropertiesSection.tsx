@@ -1,4 +1,3 @@
-
 import React from 'react';
 import PropertyInput from '../../PropertyInput';
 import { SVGElementData, TextElementProps, AnimationTrack, AnimatableProperty, AppAction } from '../../../types';
@@ -12,15 +11,14 @@ import {
 } from '../../../constants';
 import { ChevronDownIconSolid, AlignLeftIcon, AlignCenterIcon, AlignRightIcon, AlignJustifyIcon } from '../../icons/EditorIcons'; // Added AlignJustifyIcon
 import FontFamilyPicker from './FontFamilyPicker';
-// TextOnPathSection import removed as it's handled in PropertiesPanel via Accordion
 
 interface TextPropertiesSectionProps {
   elementFromState: TextElementProps; 
   animatedElementProps: TextElementProps;
   animationTracksForSelected: AnimationTrack[];
   currentTime: number;
-  onAddKeyframe: (elementId: string, property: AnimatableProperty, value: any) => void;
-  onRemoveKeyframe: (elementId: string, property: AnimatableProperty, time: number) => void;
+  onAddKeyframe: (property: AnimatableProperty, value: any) => void;
+  onRemoveKeyframe: (elementId: string, property: AnimatableProperty, time: number) => void; 
   dispatch: React.Dispatch<AppAction>;
   availablePathSources: SVGElementData[]; 
 }
@@ -135,29 +133,42 @@ const TextPropertiesSection: React.FC<TextPropertiesSectionProps> = ({
 
         if (customRender) {
              return (
-                <div key={key} className="mb-2 p-2 border border-gray-700/80 bg-gray-750 rounded-md shadow">
-                    <label className="block text-xs font-medium text-gray-300 mb-1">{label}</label>
-                    {customRender()}
-                </div>
+                <PropertyInput
+                    key={key}
+                    label={label}
+                    propKey={key as AnimatableProperty}
+                    value={displayValueProp}
+                    baseValue={baseValueProp}
+                    inputType="custom"
+                    ownerId={elementFromState.id}
+                >
+                  {customRender()}
+                </PropertyInput>
             );
         }
         
         if (inputType === 'select' && options) {
           return (
-            <div key={key} className="mb-2 p-2 border border-gray-700/80 bg-gray-750 rounded-md shadow">
-              <label htmlFor={`${elementFromState.id}-${key}`} className="block text-xs font-medium text-gray-300 mb-1">{label}</label>
+            <PropertyInput
+              key={key}
+              label={label}
+              propKey={key as AnimatableProperty}
+              value={String(displayValueProp || '')}
+              baseValue={String(baseValueProp || '')}
+              inputType="custom"
+              ownerId={elementFromState.id}
+            >
               <div className="relative">
                 <select
                   id={`${elementFromState.id}-${key}`}
                   value={String(displayValueProp || '')}
                   onChange={(e) => handleStaticPropChange(key, e.target.value)}
-                  className="w-full p-1.5 bg-gray-700 border border-gray-600 rounded-md focus:ring-sky-500 focus:border-sky-500 text-sm text-gray-100 appearance-none pr-7 custom-scrollbar"
+                  className="w-full p-1.5 glass-select custom-scrollbar"
                 >
                   {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
-                <ChevronDownIconSolid size={16} className="text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
-            </div>
+            </PropertyInput>
           );
         }
         
@@ -179,8 +190,14 @@ const TextPropertiesSection: React.FC<TextPropertiesSectionProps> = ({
         );
       })}
 
-      <div className="mb-2 p-2 border border-gray-700/80 bg-gray-750 rounded-md shadow">
-        <span className="block text-xs font-medium text-gray-300 mb-1.5">Text Decoration</span>
+      <PropertyInput
+        label="Decoration"
+        propKey="textDecoration"
+        value={currentDecorationValue}
+        baseValue={textElement.textDecoration || DEFAULT_TEXT_DECORATION}
+        inputType="custom"
+        ownerId={elementFromState.id}
+      >
         <div className="space-y-1.5">
             <label htmlFor={`${elementFromState.id}-textDecoration-underline`} className="flex items-center space-x-2 cursor-pointer">
                 <input
@@ -188,7 +205,7 @@ const TextPropertiesSection: React.FC<TextPropertiesSectionProps> = ({
                     id={`${elementFromState.id}-textDecoration-underline`}
                     checked={isUnderlineActive}
                     onChange={(e) => handleTextDecorationChange('underline', e.target.checked)}
-                    className="form-checkbox h-3.5 w-3.5 text-sky-500 bg-gray-700 border-gray-600 rounded focus:ring-sky-500 focus:ring-offset-gray-800/50"
+                    className="form-checkbox h-3.5 w-3.5 text-accent-color bg-dark-bg-tertiary border-[var(--glass-border-color)] rounded focus:ring-accent-color focus:ring-offset-gray-800/50"
                 />
                 <span className="text-sm text-gray-200">Underline</span>
             </label>
@@ -198,12 +215,12 @@ const TextPropertiesSection: React.FC<TextPropertiesSectionProps> = ({
                     id={`${elementFromState.id}-textDecoration-linethrough`}
                     checked={isLineThroughActive}
                     onChange={(e) => handleTextDecorationChange('line-through', e.target.checked)}
-                    className="form-checkbox h-3.5 w-3.5 text-sky-500 bg-gray-700 border-gray-600 rounded focus:ring-sky-500 focus:ring-offset-gray-800/50"
+                    className="form-checkbox h-3.5 w-3.5 text-accent-color bg-dark-bg-tertiary border-[var(--glass-border-color)] rounded focus:ring-sky-500 focus:ring-offset-gray-800/50"
                 />
                 <span className="text-sm text-gray-200">Line-through</span>
             </label>
         </div>
-      </div>
+      </PropertyInput>
     </div>
   );
 };

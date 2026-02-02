@@ -1,4 +1,3 @@
-
 import React, { useContext } from 'react'; 
 import PropertyInput from '../../PropertyInput';
 import { SVGElementData, RectElementProps, CircleElementProps, PathElementProps, AnimationTrack, AnimatableProperty, AppAction, BezierPoint, ImageElementProps, TextElementProps } from '../../../types';
@@ -12,7 +11,7 @@ interface GeometrySectionProps {
   animatedElementProps: SVGElementData;
   animationTracksForSelected: AnimationTrack[];
   currentTime: number;
-  onAddKeyframe: (elementId: string, property: AnimatableProperty, value: any) => void;
+  onAddKeyframe: (property: AnimatableProperty, value: any) => void;
   onRemoveKeyframe: (elementId: string, property: AnimatableProperty, time: number) => void;
   dispatch: React.Dispatch<AppAction>; 
 }
@@ -49,18 +48,14 @@ const BezierPointCoordinateInput: React.FC<{
         }
     };
     
-    const valueForPropertyInput = value !== undefined ? value : 0; 
-
     return (
         <PropertyInput
             label={label}
             propKey={coordKey as any} 
-            value={valueForPropertyInput} 
-            baseValue={valueForPropertyInput} 
-            inputType="number"
-            ownerId={pathId} 
-            sliderConfig={{ min: -10000, max: 10000, step: 0.1 }} 
-            onAddKeyframe={undefined} 
+            value={value} 
+            baseValue={value} 
+            inputType="custom" // Not a real type, just to prevent default rendering
+            ownerId={pathId}
         >
              <input
                 type="number"
@@ -69,7 +64,7 @@ const BezierPointCoordinateInput: React.FC<{
                 onBlur={handleCommit}
                 onKeyDown={(e) => e.key === 'Enter' && handleCommit()}
                 step="0.1"
-                className="w-full glass-input" // Use glass-input class
+                className="w-full glass-input"
             />
         </PropertyInput>
     );

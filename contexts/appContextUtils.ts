@@ -1,4 +1,3 @@
-
 import { AppState, AppStateSnapshot, SVGElementData } from '../types';
 import { MAX_HISTORY_ENTRIES } from '../constants';
 
@@ -17,7 +16,7 @@ export const getNextOrderUtil = (elements: SVGElementData[], targetParentId: str
 export const recordToHistory = (
   prevStateHistory: AppStateSnapshot[],
   prevHistoryIndex: number,
-  newStateSliceForSnapshot: Pick<AppState, 'artboard' | 'elements' | 'animation' | 'selectedElementId' | 'currentTime' | 'playbackSpeed'>,
+  newStateSliceForSnapshot: Pick<AppState, 'artboard' | 'elements' | 'animation' | 'selectedElementId' | 'currentTime' | 'playbackSpeed' | 'loopMode' | 'playbackDirection'>,
   actionDescription: string
 ): Pick<AppState, 'history' | 'historyIndex'> => {
   const snapshot: AppStateSnapshot = {
@@ -26,7 +25,9 @@ export const recordToHistory = (
     animation: JSON.parse(JSON.stringify(newStateSliceForSnapshot.animation)),
     selectedElementId: newStateSliceForSnapshot.selectedElementId,
     currentTime: newStateSliceForSnapshot.currentTime,
-    playbackSpeed: newStateSliceForSnapshot.playbackSpeed, // Added playbackSpeed
+    playbackSpeed: newStateSliceForSnapshot.playbackSpeed,
+    loopMode: newStateSliceForSnapshot.loopMode,
+    playbackDirection: newStateSliceForSnapshot.playbackDirection,
     actionDescription,
   };
 

@@ -1,15 +1,8 @@
 
 
-import { AppState, AppAction, AnimationTrack, AnimatableProperty, Keyframe, AnySVGGradient, BezierPoint, TextElementProps } from '../../types';
+import { AppState, AppAction, AnimationTrack, AnimatableProperty, Keyframe, AnySVGGradient, BezierPoint, TextElementProps, SubReducerResult } from '../../types';
 import { DEFAULT_KEYFRAME_EASING } from '../../constants';
 import { generateUniqueId } from '../appContextUtils';
-
-export interface SubReducerResult {
-    updatedStateSlice: Partial<AppState>;
-    actionDescriptionForHistory?: string;
-    newSvgCode?: string; // Added
-    skipHistoryRecording?: boolean; // Added
-}
 
 export function handleSetAnimation(state: AppState, payload: Extract<AppAction, { type: 'SET_ANIMATION' }>['payload']): SubReducerResult {
     return {
@@ -34,7 +27,7 @@ export function handleAddKeyframe(state: AppState, payload: Extract<AppAction, {
     let validatedValue = valueToAdd;
     const element = state.elements.find(el => el.id === elementId);
 
-    if (Array.isArray(valueToAdd) && valueToAdd.every(item => typeof item === 'object' && 'x' in item && 'y' in item && 'id' in item)) {
+    if (property === 'd' && Array.isArray(valueToAdd) && valueToAdd.every(item => typeof item === 'object' && 'x' in item && 'y' in item && 'id' in item)) {
         validatedValue = JSON.parse(JSON.stringify(valueToAdd));
     } else if (typeof valueToAdd === 'object' && valueToAdd !== null && (property === 'fill' || property === 'stroke')) {
         const grad = valueToAdd as AnySVGGradient;
@@ -49,14 +42,18 @@ export function handleAddKeyframe(state: AppState, payload: Extract<AppAction, {
             const numVal = Number(valueToAdd);
             validatedValue = Number.isNaN(numVal) ? undefined : numVal;
         }
-    } else { 
-        const numVal = Number(valueToAdd);
-        if (Number.isNaN(numVal)) {
-            console.warn(`Invalid number for ${property}: ${valueToAdd}. Keyframe not added/updated.`);
-            return { updatedStateSlice: {} };
+    } else {
+        const numericProps: AnimatableProperty[] = ['x', 'y', 'width', 'height', 'r', 'rx', 'ry', 'opacity', 'rotation', 'scale', 'strokeWidth', 'strokeDashoffset', 'motionPathStart', 'motionPathEnd', 'motionPathOffsetX', 'motionPathOffsetY', 'drawStartPercent', 'drawEndPercent', 'fontSize', 'letterSpacing', 'lineHeight', 'skewX', 'skewY'];
+        if (numericProps.includes(property)) {
+            const numVal = Number(valueToAdd);
+            if (Number.isNaN(numVal)) {
+                console.warn(`Invalid number for ${property}: ${valueToAdd}. Keyframe not added/updated.`);
+                return { updatedStateSlice: {} };
+            }
+            validatedValue = numVal;
         }
-        validatedValue = numVal;
     }
+
 
     const trackIndex = state.animation.tracks.findIndex(t => t.elementId === elementId && t.property === property);
     let newTracks = [...state.animation.tracks];

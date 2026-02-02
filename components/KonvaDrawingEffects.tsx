@@ -2,8 +2,8 @@
 import React, { useEffect, useCallback, useContext, useRef } from 'react';
 import Konva from 'konva';
 import { AppContext } from '../contexts/AppContext';
-import { PathElementProps, BezierPoint, AccumulatedTransform, AppState, SVGElementData } from '../../types';
-import { buildPathDFromStructuredPoints } from '../../utils/pathUtils';
+import { PathElementProps, BezierPoint, AccumulatedTransform, AppState, SVGElementData } from '../types';
+import { buildPathDFromStructuredPoints } from '../utils/pathUtils';
 // getAccumulatedTransformUtil removed as we're using local transforms now for selected handles
 import {
     GHOST_PATH_OPACITY, DEFAULT_STROKE_WIDTH, BEZIER_CLOSING_THRESHOLD,
@@ -14,8 +14,8 @@ import {
     DEFAULT_PATH_FILL, DEFAULT_ELEMENT_STROKE,
     GHOST_PATH_STROKE_WIDTH_FACTOR, GHOST_PATH_COLOR, GHOST_PATH_STROKE_DASHARRAY,
     DEFAULT_SKEW_X, DEFAULT_SKEW_Y
-} from '../../constants';
-import { parseDashArrayKonva } from '../../utils/konvaUtils';
+} from '../constants';
+import { parseDashArrayKonva } from '../utils/konvaUtils';
 
 interface KonvaDrawingEffectsProps {
   currentTool: AppState['currentTool'];
@@ -32,7 +32,6 @@ interface KonvaDrawingEffectsProps {
 
   stageRef: React.RefObject<Konva.Stage>;
   effectsLayerRef: React.RefObject<Konva.Layer>; // For new path previews
-  // artboardGroupRef no longer directly needed if handles are parented to path's parent
   elementNodeMapRef: React.MutableRefObject<Map<string, Konva.Node>>;
 
   handleBezierPointPointerDown: (e: Konva.KonvaEventObject<PointerEvent>, pathId: string, pointId: string, handleType: 'anchor' | 'h1' | 'h2') => void;
@@ -41,7 +40,7 @@ interface KonvaDrawingEffectsProps {
 const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
   currentTool, isDrawingPencil, currentPencilPath,
   isDrawingBezierPath, currentBezierPathData, isExtendingPathInfo,
-  selectedElementId, selectedBezierPointId, elements, // Pass full elements
+  selectedElementId, selectedBezierPointId, elements, 
   editingKeyframeShapePreview,
   stageScale,
   stageRef, effectsLayerRef, elementNodeMapRef,
@@ -119,15 +118,13 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
     let activePathDataForRendering: PathElementProps | null = null;
     let konvaParentForHandles: Konva.Group | null = null; // The Konva group that will contain the handles
     let isDrawingOrExtendingThisPath = false;
+    const artboardOffsetX = state.artboard.x || 0;
+    const artboardOffsetY = state.artboard.y || 0;
 
     if (isDrawingBezierPath && currentBezierPathData?.structuredPoints) {
-        // CASE 1: Actively drawing a new path or extending an existing one.
-        // currentBezierPathData is the source of truth for the path preview and its handles.
+        // This block handles both new path drawing AND path extension.
         activePathDataForRendering = currentBezierPathData;
         isDrawingOrExtendingThisPath = true;
-        
-        const artboardOffsetX = state.artboard.x || 0;
-        const artboardOffsetY = state.artboard.y || 0;
 
         // Render the path preview itself on the effects layer.
         currentBezierKonvaPathRef.current = new Konva.Path({ 
@@ -165,9 +162,8 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
         effectsLayer.add(currentBezierKonvaHandlesGroupRef.current);
         konvaParentForHandles = currentBezierKonvaHandlesGroupRef.current;
       
-    } else if (currentTool === 'bezierPath' && selectedElementId) {
-        // CASE 2: Bezier tool is active, an element is selected, but not actively drawing/extending it.
-        // This handles showing handles for an existing selected path or a path being edited at a keyframe.
+    } else if (currentTool === 'bezierPath' && selectedElementId && !isDrawingBezierPath) {
+        // Handles for a selected, non-drawing path (or keyframe shape editing)
         const baseRawPathFromState = state.elements.find(el => el.id === selectedElementId && el.type === 'path') as PathElementProps | undefined;
         const animatedPathFromProps = elements.find(el => el.id === selectedElementId && el.type === 'path') as PathElementProps | undefined;
 
@@ -187,7 +183,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
         } else if (animatedPathFromProps && Array.isArray(animatedPathFromProps.d)) {
             activePathDataForRendering = { ...animatedPathFromProps, structuredPoints: animatedPathFromProps.d as BezierPoint[] };
         } else if (baseRawPathFromState?.structuredPoints) {
-            activePathDataForRendering = { ...animatedPathFromProps, ...baseRawPathFromState };
+            activePathDataForRendering = { ...baseRawPathFromState, ...animatedPathFromProps };
         }
         
         if (activePathDataForRendering) {
@@ -209,7 +205,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
         }
     }
 
-    // Common logic to render handles if activePathDataForRendering and konvaParentForHandles are set
+    // Common logic to render handles
     if (activePathDataForRendering && activePathDataForRendering.structuredPoints && konvaParentForHandles && activePathDataForRendering.id) {
         const linesToAdd: Konva.Line[] = []; const handleCirclesToAdd: Konva.Circle[] = []; const anchorCirclesToAdd: Konva.Circle[] = [];
         activePathDataForRendering.structuredPoints.forEach(point => {
@@ -272,8 +268,8 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
                 const absTransformGhostDecomposed = konvaNodeForOriginalPathForGhost.getAbsoluteTransform().decompose();
                 ghostPathKonvaNodeRef.current = new Konva.Path({
                     data: pathDataForGhost,
-                    x: absTransformGhostDecomposed.x, // Position directly on stage
-                    y: absTransformGhostDecomposed.y,
+                    x: absTransformGhostDecomposed.x + artboardOffsetX, 
+                    y: absTransformGhostDecomposed.y + artboardOffsetY,
                     rotation: absTransformGhostDecomposed.rotation,
                     scaleX: absTransformGhostDecomposed.scaleX, scaleY: absTransformGhostDecomposed.scaleY,
                     skewX: absTransformGhostDecomposed.skewX, skewY: absTransformGhostDecomposed.skewY,
@@ -285,6 +281,7 @@ const KonvaDrawingEffects: React.FC<KonvaDrawingEffectsProps> = ({
                     name: `ghost-${originalPathElement.id}`
                 });
                 effectsLayer.add(ghostPathKonvaNodeRef.current);
+                // Position is already absolute relative to stage due to absTransformGhostDecomposed.x/y
                 ghostPathKonvaNodeRef.current.moveToBottom();
             }
         }

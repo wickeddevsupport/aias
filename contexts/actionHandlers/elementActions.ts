@@ -1,5 +1,6 @@
 
-import { AppState, AppAction, SVGElementData, RectElementProps, CircleElementProps, PathElementProps, GroupElementProps, TextElementProps, ImageElementProps, BaseElementProps, AnimatableProperty, Keyframe, AnySVGGradient, BezierPoint } from '../../types';
+
+import { AppState, AppAction, SVGElementData, RectElementProps, CircleElementProps, PathElementProps, GroupElementProps, TextElementProps, ImageElementProps, BaseElementProps, AnimatableProperty, Keyframe, AnySVGGradient, BezierPoint, SubReducerResult } from '../../types';
 import { generateUniqueId, getNextOrderUtil, reorderSiblingsAndNormalize } from '../appContextUtils';
 import { getAccumulatedTransform } from '../../utils/transformUtils';
 import { generateSvgStringForEditor } from '../../utils/svgGenerationUtils';
@@ -15,13 +16,6 @@ import {
 import { getElementAnimatableProperties, interpolateValue } from '../../utils/animationUtils';
 import { rectToPathStructuredPoints, circleToPathStructuredPoints, parseDStringToStructuredPoints, buildPathDFromStructuredPoints } from '../../utils/pathUtils'; // Added buildPathDFromStructuredPoints and parseDStringToStructuredPoints
 
-
-export interface SubReducerResult {
-    updatedStateSlice: Partial<AppState>;
-    actionDescriptionForHistory?: string;
-    newSvgCode?: string;
-    skipHistoryRecording?: boolean;
-}
 
 const nonKeyframedElementProps: string[] = [
   'id', 'type', 'artboardId', 'alignToPath',
@@ -298,93 +292,51 @@ export function handleUpdateElementProps(state: AppState, payload: Extract<AppAc
     updatedElements[elementIndex] = updatedElement;
 
     let newAnimationTracks = [...state.animation.tracks];
+    let actionDescriptionSuffix = '';
 
+    // Handle keyframing logic
     if (!skipHistory && id === state.selectedElementId && id !== state.artboard.id && !state.isPlaying) {
-        const animatablePropsForElement = getElementAnimatableProperties(elementBeforeUpdate.type);
-        for (const keyInPayload in props) {
-            const currentPropKey = keyInPayload as string;
-            if (nonKeyframedElementProps.includes(currentPropKey)) continue;
+      for (const keyInPayload in props) {
+        const currentPropKey = keyInPayload as string;
+        if (nonKeyframedElementProps.includes(currentPropKey)) continue;
 
-            const animProperty = currentPropKey === 'motionPathId' ? 'motionPath' : currentPropKey as AnimatableProperty;
+        const animProperty = currentPropKey === 'motionPathId' ? 'motionPath' : currentPropKey as AnimatableProperty;
+        if (!getElementAnimatableProperties(elementBeforeUpdate.type).includes(animProperty)) continue;
 
-            if (elementBeforeUpdate.type === 'circle' && animProperty === 'r' && ((props as Partial<CircleElementProps>).rx !== undefined || (props as Partial<CircleElementProps>).ry !== undefined) && (props as Partial<CircleElementProps>).r === undefined) {
-                continue;
+        const trackIndex = newAnimationTracks.findIndex(t => t.elementId === id && t.property === animProperty);
+        const targetTime = state.currentTime;
+        const committedValueFromUI = (newPropsCombined as any)[currentPropKey];
+
+        const keyframeAtCurrentTimeIndex = trackIndex > -1 ? newAnimationTracks[trackIndex].keyframes.findIndex(kf => Math.abs(kf.time - targetTime) < 0.001) : -1;
+
+        if (state.isAutoKeyframing) {
+            // Add or update a keyframe automatically
+            const newKeyframeEntry: Keyframe = {
+                time: targetTime, value: committedValueFromUI,
+                easing: (keyframeAtCurrentTimeIndex > -1 ? newAnimationTracks[trackIndex].keyframes[keyframeAtCurrentTimeIndex].easing : DEFAULT_KEYFRAME_EASING),
+                freeze: (keyframeAtCurrentTimeIndex > -1 ? newAnimationTracks[trackIndex].keyframes[keyframeAtCurrentTimeIndex].freeze : false),
+            };
+
+            if (trackIndex > -1) {
+                const updatedKeyframesForTrack = [...newAnimationTracks[trackIndex].keyframes];
+                if (keyframeAtCurrentTimeIndex > -1) updatedKeyframesForTrack[keyframeAtCurrentTimeIndex] = newKeyframeEntry;
+                else updatedKeyframesForTrack.push(newKeyframeEntry);
+                updatedKeyframesForTrack.sort((a, b) => a.time - b.time);
+                newAnimationTracks[trackIndex] = { ...newAnimationTracks[trackIndex], keyframes: updatedKeyframesForTrack };
+            } else {
+                newAnimationTracks.push({ elementId: id, property: animProperty, keyframes: [newKeyframeEntry] });
             }
-
-            if (animatablePropsForElement.includes(animProperty)) {
-                const committedValueFromUI = (newPropsCombined as any)[currentPropKey]; 
-                let keyframeValueForStorage = committedValueFromUI;
-
-                if (typeof committedValueFromUI === 'object' && committedValueFromUI !== null && (animProperty === 'fill' || animProperty === 'stroke')) {
-                    const gradValue = committedValueFromUI as AnySVGGradient;
-                    keyframeValueForStorage = { ...gradValue, id: `kf-grad-${Date.now()}-${Math.random().toString(16).slice(2,8)}`, stops: gradValue.stops.map(s => ({...s, id: s.id || generateUniqueId('stop')})) };
-                } else if (animProperty === 'd' && Array.isArray(committedValueFromUI) && committedValueFromUI.every(item => typeof item === 'object' && 'x' in item && 'y' in item && 'id' in item)) {
-                    keyframeValueForStorage = JSON.parse(JSON.stringify(committedValueFromUI));
-                } else if (elementBeforeUpdate.type === 'text' && (animProperty === 'width' || animProperty === 'height')) {
-                    if (committedValueFromUI === undefined || committedValueFromUI === null || (typeof committedValueFromUI === 'number' && !Number.isFinite(committedValueFromUI))) {
-                        keyframeValueForStorage = undefined;
-                    } else {
-                        const numVal = Number(committedValueFromUI);
-                        keyframeValueForStorage = numVal; 
-                    }
-                } else if (typeof committedValueFromUI !== 'string' && typeof committedValueFromUI !== 'number' && !Array.isArray(committedValueFromUI) && committedValueFromUI !== undefined) {
-                    continue;
-                } else if (committedValueFromUI === undefined && animProperty !== 'r' && !(elementBeforeUpdate.type === 'text' && (animProperty === 'width' || animProperty === 'height'))) {
-                    continue;
-                }
-                if ((animProperty === 'fill' || animProperty === 'stroke') && keyframeValueForStorage === null) keyframeValueForStorage = 'none';
-                if (animProperty === 'motionPath' && keyframeValueForStorage === null) keyframeValueForStorage = '';
-
-                const trackIndex = newAnimationTracks.findIndex(t => t.elementId === id && t.property === animProperty);
-                const targetTime = state.currentTime;
-                const trackKeyframesBeforeUpdate = trackIndex > -1 ? newAnimationTracks[trackIndex].keyframes : [];
-
-                let baseValueForInterpolation: Keyframe['value'] | undefined;
-                let baseElementPropValue: any;
-                if (elementBeforeUpdate.type === 'circle' && (animProperty === 'r' || animProperty === 'rx' || animProperty === 'ry')) {
-                    baseElementPropValue = (elementBeforeUpdate as CircleElementProps)[animProperty as 'r' | 'rx' | 'ry'];
-                } else if (elementBeforeUpdate.type === 'text' && (animProperty === 'width' || animProperty === 'height')) {
-                    baseElementPropValue = (elementBeforeUpdate as TextElementProps)[animProperty as 'width' | 'height']; 
-                } else {
-                    baseElementPropValue = (elementBeforeUpdate as any)[animProperty];
-                }
-
-
-                if (baseElementPropValue !== undefined) {
-                    if (animProperty === 'd' && Array.isArray(baseElementPropValue)) {
-                        baseValueForInterpolation = JSON.parse(JSON.stringify(baseElementPropValue));
-                    } else if (typeof baseElementPropValue !== 'boolean' && typeof baseElementPropValue !== 'function') {
-                        baseValueForInterpolation = baseElementPropValue as Keyframe['value'];
-                    }
-                } else { 
-                    if (elementBeforeUpdate.type === 'text' && (animProperty === 'width' || animProperty === 'height')) {
-                         baseValueForInterpolation = undefined; 
-                    } else if (animProperty === 'opacity' || animProperty === 'scale') baseValueForInterpolation = 1;
-                    else if (numericPropsRequiringFinite.includes(animProperty) || positiveNumericProps.includes(animProperty) || animProperty === 'lineHeight') baseValueForInterpolation = (animProperty === 'lineHeight' ? DEFAULT_LINE_HEIGHT : 0);
-                    else if (elementBeforeUpdate.type === 'circle' && (animProperty === 'r' || animProperty === 'rx' || animProperty === 'ry')) {
-                         baseValueForInterpolation = DEFAULT_CIRCLE_R;
-                    }
-                    else if (animProperty === 'fill' || animProperty === 'stroke') baseValueForInterpolation = 'none';
-                    else if (animProperty === 'text') baseValueForInterpolation = '';
-                    else if (animProperty === 'd') baseValueForInterpolation = '';
-                }
-
-                const interpolatedValueAtTargetTime = interpolateValue(trackKeyframesBeforeUpdate, targetTime, baseValueForInterpolation, animProperty);
-                const valuesDiffer = JSON.stringify(interpolatedValueAtTargetTime) !== JSON.stringify(keyframeValueForStorage);
-                let existingKeyframeAtIndex = trackKeyframesBeforeUpdate.findIndex(kf => Math.abs(kf.time - targetTime) < 0.001);
-
-                if (valuesDiffer || existingKeyframeAtIndex === -1) {
-                    const newKeyframeEntry: Keyframe = { time: targetTime, value: keyframeValueForStorage, easing: DEFAULT_KEYFRAME_EASING, freeze: false };
-                    if (trackIndex > -1) {
-                        const updatedKeyframesForTrack = [...trackKeyframesBeforeUpdate];
-                        if (existingKeyframeAtIndex > -1) { updatedKeyframesForTrack[existingKeyframeAtIndex] = newKeyframeEntry; }
-                        else { updatedKeyframesForTrack.push(newKeyframeEntry); updatedKeyframesForTrack.sort((a, b) => a.time - b.time); }
-                        newAnimationTracks[trackIndex] = { ...newAnimationTracks[trackIndex], keyframes: updatedKeyframesForTrack};
-                    } else { newAnimationTracks.push({ elementId: id, property: animProperty, keyframes: [newKeyframeEntry] }); }
-                }
-            }
+            actionDescriptionSuffix = ' & Keyframed';
+        } else if (keyframeAtCurrentTimeIndex > -1) {
+            // Auto-keyframing is OFF, but a keyframe exists. Update it.
+            const updatedKeyframes = [...newAnimationTracks[trackIndex].keyframes];
+            updatedKeyframes[keyframeAtCurrentTimeIndex] = { ...updatedKeyframes[keyframeAtCurrentTimeIndex], value: committedValueFromUI };
+            newAnimationTracks[trackIndex] = { ...newAnimationTracks[trackIndex], keyframes: updatedKeyframes };
+            actionDescriptionSuffix = ' & Updated Keyframe';
         }
+      }
     }
+
 
     const updatedStateSlice: Partial<AppState> = { elements: updatedElements, animation: { ...state.animation, tracks: newAnimationTracks } };
     if (state.previewTarget && state.previewTarget.elementId === id) {
@@ -399,11 +351,12 @@ export function handleUpdateElementProps(state: AppState, payload: Extract<AppAc
     const propsChanged = Object.keys(props).join(', ');
     return {
         updatedStateSlice,
-        actionDescriptionForHistory: skipHistory ? undefined : `Update ${propsChanged} of ${elementBeforeUpdate.name || elementBeforeUpdate.id}`,
+        actionDescriptionForHistory: skipHistory ? undefined : `Update ${propsChanged} of ${elementBeforeUpdate.name || elementBeforeUpdate.id}${actionDescriptionSuffix}`,
         newSvgCode: skipHistory ? undefined : generateSvgStringForEditor(updatedElements, state.artboard),
         skipHistoryRecording: skipHistory
     };
 }
+
 
 export function handleUpdateElementName(state: AppState, payload: Extract<AppAction, { type: 'UPDATE_ELEMENT_NAME' }>['payload']): SubReducerResult {
     const { id, name } = payload;
@@ -738,14 +691,16 @@ export function handleConvertToEditablePath(state: AppState, payload: Extract<Ap
         return { updatedStateSlice: {} }; 
     }
     
+    const elementForConversion = originalElement as RectElementProps | CircleElementProps | PathElementProps;
+
     const newPathElement: PathElementProps = {
         id: originalElement.id, artboardId: originalElement.artboardId, type: 'path',
         name: originalElement.name || `Path from ${originalElement.type}`,
         parentId: originalElement.parentId, order: originalElement.order,
         x: originalElement.x, y: originalElement.y,
-        fill: originalElement.fill || (originalElement.type === 'path' ? (originalElement as PathElementProps).fill : DEFAULT_PATH_FILL), 
-        stroke: originalElement.stroke || DEFAULT_ELEMENT_STROKE,
-        strokeWidth: originalElement.strokeWidth || DEFAULT_STROKE_WIDTH, 
+        fill: elementForConversion.fill || DEFAULT_PATH_FILL,
+        stroke: elementForConversion.stroke || DEFAULT_ELEMENT_STROKE,
+        strokeWidth: elementForConversion.strokeWidth || DEFAULT_STROKE_WIDTH,
         opacity: originalElement.opacity || DEFAULT_OPACITY,
         rotation: originalElement.rotation || DEFAULT_ROTATION, 
         scale: originalElement.scale || DEFAULT_SCALE,

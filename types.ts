@@ -218,6 +218,7 @@ export interface TextElementProps extends BaseElementProps {
   align?: 'left' | 'center' | 'right' | 'justify'; // Konva text align (for within the bounding box)
   wrap?: 'word' | 'char' | 'none'; // Konva text wrap
   textPathId?: string | null; 
+  textPathStartOffset?: number; // New: 0 to 1 value for starting offset on path
 }
 
 export interface ImageElementProps extends BaseElementProps {
@@ -259,7 +260,9 @@ export type AnimatableProperty =
   | 'text'    
   | 'letterSpacing' 
   | 'lineHeight'   
-  | 'textPath'; 
+  | 'textPath'
+  | 'textPathStartOffset' // New: animatable property for text on path
+  | 'textDecoration'; 
 
 
 export interface Keyframe {
@@ -280,13 +283,17 @@ export interface Animation {
   tracks: AnimationTrack[];
 }
 
+export type LoopMode = 'once' | 'repeat' | 'ping-pong';
+
 export interface AppStateSnapshot {
   artboard: Artboard;
   elements: SVGElementData[];
   animation: Animation;
   selectedElementId: string | null;
   currentTime: number;
-  playbackSpeed: number; // Added
+  playbackSpeed: number;
+  loopMode: LoopMode;
+  playbackDirection: 1 | -1;
   actionDescription: string;
 }
 
@@ -337,19 +344,61 @@ export interface TimelineKeyframeClipboardData {
   freeze?: boolean;
 }
 
+export interface AILogEntry {
+  timestamp: string;
+  prompt: string;
+  status: 'success' | 'error';
+  message: string;
+}
+
+export interface ImageAsset {
+  id: string;
+  type: 'image';
+  name: string;
+  thumbnailSrc: string; // data:image/...
+  dataUrl: string; // The full data URL for the image
+  width: number;
+  height: number;
+}
+
+export interface SvgAsset {
+  id: string;
+  type: 'svg';
+  name:string;
+  thumbnailSrc: string; // A data URL of a rendered SVG thumbnail
+  rawContent: string; // The original SVG string
+  // Store the parsed result to avoid re-parsing on every drop
+  parsedArtboard: Partial<Artboard>;
+  parsedElements: SVGElementData[];
+}
+
+export type Asset = ImageAsset | SvgAsset;
+
+export interface NotificationState {
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
+export type ActiveLeftTab = 'maestro' | 'hierarchy' | 'assets';
+
 export interface AppState {
   artboard: Artboard;
   elements: SVGElementData[];
+  assets: Asset[];
   selectedElementId: string | null;
   animation: Animation;
   currentTime: number;
-  playbackSpeed: number; // Added
+  playbackSpeed: number;
+  loopMode: LoopMode;
+  playbackDirection: 1 | -1;
   isPlaying: boolean;
+  isAutoKeyframing: boolean;
   svgCode: string;
   svgCodeError: string | null;
   aiPrompt: string;
   isAiLoading: boolean;
   aiError: string | null;
+  aiLogs: AILogEntry[];
   motionPathSelectionTargetElementId: string | null;
   textOnPathSelectionTargetElementId: string | null; 
   previewTarget: {
@@ -410,7 +459,17 @@ export interface AppState {
   // On-Canvas Text Editor State
   onCanvasTextEditor: OnCanvasTextEditorState | null;
   // Flag for Text Tool
-  newlyAddedTextElementId: string | null; 
+  newlyAddedTextElementId: string | null;
+  notification: NotificationState | null;
+  activeLeftTab: ActiveLeftTab;
+  // Confirmation Dialog State
+  confirmationDialog: {
+    isVisible: boolean;
+    message: string;
+    confirmButtonText: string;
+    onConfirm: () => void;
+  } | null;
+  newProjectDialogVisible: boolean;
 }
 
 // Export AccumulatedTransform by referencing its renamed import
@@ -422,7 +481,7 @@ export const ALL_ANIMATABLE_PROPERTIES: AnimatableProperty[] = [
   'rotation', 'scale', 'skewX', 'skewY', // Added skewX, skewY
   'motionPath', 'motionPathStart', 'motionPathEnd', 'motionPathOffsetX', 'motionPathOffsetY', 
   'strokeDasharray', 'strokeDashoffset', 'drawStartPercent', 'drawEndPercent', 
-  'fontSize', 'text', 'letterSpacing', 'lineHeight', 'textPath'
+  'fontSize', 'text', 'letterSpacing', 'lineHeight', 'textPath', 'textPathStartOffset', 'textDecoration'
 ];
 
 // Define a type for the transform payload properties
@@ -440,10 +499,23 @@ export type TransformableProps = {
   ry?: number; 
 };
 
+export interface SubReducerResult {
+  updatedStateSlice: Partial<AppState>;
+  actionDescriptionForHistory?: string;
+  newSvgCode?: string;
+  skipHistoryRecording?: boolean;
+}
+
+export type AnySubReducerResult = SubReducerResult;
+
 
 // Action Types
 export type AppAction =
+  | { type: 'ADD_ASSET'; payload: Asset }
+  | { type: 'DELETE_ASSET'; payload: string }
+  | { type: 'ADD_ASSET_FROM_LIBRARY'; payload: { assetId: string; position: { x: number; y: number } } }
   | { type: 'SET_ARTBOARD_PROPS'; payload: Partial<Artboard> }
+  | { type: 'UPDATE_ARTBOARD_PROPS_CONTINUOUS'; payload: Partial<Artboard> }
   | { type: 'ADD_ELEMENT'; payload: { type: SVGElementType; targetParentId?: string | null; props?: Partial<SVGElementData>; andInitiateEdit?: boolean } } 
   | { type: 'ADD_GROUP' }
   | { type: 'UPDATE_ELEMENT_PROPS'; payload: { id: string; props: Partial<SVGElementData>; skipHistory?: boolean } }
@@ -464,14 +536,20 @@ export type AppAction =
   | { type: 'SHIFT_ELEMENT_ANIMATION_TIMES'; payload: { elementId: string; timeShift: number } } 
   | { type: 'SHIFT_PROPERTY_GROUP_TIMES'; payload: { elementId: string; propertiesToShift: AnimatableProperty[]; timeShift: number } }
   | { type: 'SET_CURRENT_TIME'; payload: number }
-  | { type: 'SET_PLAYBACK_SPEED'; payload: number } // Added
+  | { type: 'SET_PLAYBACK_SPEED'; payload: number }
+  | { type: 'SET_LOOP_MODE'; payload: LoopMode }
+  | { type: 'SET_PLAYBACK_DIRECTION'; payload: 1 | -1 }
   | { type: 'SET_IS_PLAYING'; payload: boolean }
+  | { type: 'TOGGLE_AUTO_KEYFRAMING' }
   | { type: 'SET_SVG_CODE'; payload: { code: string; error?: string | null } }
   | { type: 'APPLY_SVG_CODE'; payload: string }
   | { type: 'SET_AI_PROMPT'; payload: string }
   | { type: 'SET_AI_LOADING'; payload: boolean }
   | { type: 'SET_AI_ERROR'; payload: string | null }
+  | { type: 'ADD_AI_LOG'; payload: AILogEntry }
+  | { type: 'EXECUTE_AI_ACTIONS_BATCH', payload: { actions: AppAction[], log: string } }
   | { type: 'SET_MOTION_PATH_SELECTION_TARGET'; payload: string | null }
+  | { type: 'ASSIGN_MOTION_PATH'; payload: { elementId: string; pathId: string | null } }
   | { type: 'SET_TEXT_ON_PATH_SELECTION_TARGET'; payload: string | null } 
   | { type: 'ASSIGN_TEXT_PATH'; payload: { textElementId: string; pathElementId: string | null } } 
   | { type: 'IMPORT_SVG_STRING'; payload: string }
@@ -538,7 +616,16 @@ export type AppAction =
   | { type: 'SHOW_ON_CANVAS_TEXT_EDITOR'; payload: OnCanvasTextEditorState }
   | { type: 'HIDE_ON_CANVAS_TEXT_EDITOR' }
   | { type: 'UPDATE_ON_CANVAS_TEXT_EDITOR_VALUE'; payload: string }
-  | { type: 'CLEAR_NEWLY_ADDED_TEXT_FLAG' }; 
+  | { type: 'CLEAR_NEWLY_ADDED_TEXT_FLAG' }
+  | { type: 'NEW_PROJECT'; payload: { width: number; height: number } }
+  // Confirmation Dialog Actions
+  | { type: 'SHOW_CONFIRMATION_DIALOG'; payload: { message: string; confirmButtonText?: string; onConfirm: () => void; } }
+  | { type: 'HIDE_CONFIRMATION_DIALOG' }
+  | { type: 'SHOW_NEW_PROJECT_DIALOG' }
+  | { type: 'HIDE_NEW_PROJECT_DIALOG' }
+  | { type: 'SHOW_NOTIFICATION'; payload: NotificationState }
+  | { type: 'HIDE_NOTIFICATION' }
+  | { type: 'SET_ACTIVE_TAB'; payload: ActiveLeftTab };
 
 
 // For Timeline Panel Property Grouping
@@ -581,7 +668,7 @@ export const TIMELINE_PROPERTY_GROUPS: Record<SVGElementType, TimelinePropertyUI
     { key: 'Appearance', label: 'Appearance', properties: ['fill', 'stroke', 'strokeWidth', 'opacity'] },
     { key: 'Geometry', label: 'Geometry', properties: ['width', 'height']}, 
     { key: 'Text', label: 'Text Properties', properties: ['fontSize', 'text', 'letterSpacing', 'lineHeight'] }, 
-    { key: 'TextLayout', label: 'Text Path', properties: ['textPath'] }, 
+    { key: 'TextLayout', label: 'Text Path', properties: ['textPath', 'textPathStartOffset'] }, 
     { key: 'MotionPath', label: 'Motion Path', properties: ['motionPath', 'motionPathStart', 'motionPathEnd', 'motionPathOffsetX', 'motionPathOffsetY'] },
   ],
   image: [

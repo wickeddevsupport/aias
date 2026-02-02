@@ -1,4 +1,3 @@
-
 import React, { useContext } from 'react';
 import { AppContext } from '../../../contexts/AppContext';
 import PropertyInput from '../../PropertyInput';
@@ -103,7 +102,14 @@ const ElementInfoSection: React.FC<ElementInfoSectionProps> = ({
       {elementFromState.type === 'text' && (
         <>
           <ReadOnlyInfoField label="Font Family" value={(elementFromState as TextElementProps).fontFamily} />
-          <ReadOnlyInfoField label="Font Size (current)" value={(animatedElementProps as TextElementProps).fontSize?.toFixed(1)} />
+          <ReadOnlyInfoField 
+            label="Font Size (current)" 
+            value={
+              typeof (animatedElementProps as TextElementProps).fontSize === 'number'
+              ? ((animatedElementProps as TextElementProps).fontSize as number).toFixed(1)
+              : String((animatedElementProps as TextElementProps).fontSize ?? '-')
+            } 
+          />
           <ReadOnlyInfoField label="Font Weight" value={(elementFromState as TextElementProps).fontWeight} />
           <ReadOnlyInfoField label="Font Style" value={(elementFromState as TextElementProps).fontStyle} />
           <ReadOnlyInfoField label="Text Anchor" value={(elementFromState as TextElementProps).textAnchor} />

@@ -1,8 +1,9 @@
 
+
 import React, { useRef, useEffect, useState, useCallback, useContext, useMemo } from 'react';
-import { SVGElementData, AnimatableProperty, Keyframe, AnySVGGradient, TimelinePropertyUIGroup, TIMELINE_PROPERTY_GROUPS, TimelinePropertyGroupKey, Artboard, TimelineSelectionType, BezierPoint, TimelineViewMode, AnimationTrack } from '../types';
+import { SVGElementData, AnimatableProperty, Keyframe, AnySVGGradient, TimelinePropertyUIGroup, TIMELINE_PROPERTY_GROUPS, TimelinePropertyGroupKey, Artboard, TimelineSelectionType, BezierPoint, TimelineViewMode, AnimationTrack, LoopMode } from '../types';
 import { TIMELINE_RULER_HEIGHT, TIMELINE_GROUP_ROW_HEIGHT, TIMELINE_PROPERTY_ROW_HEIGHT, TIMELINE_CONTEXT_MENU_WIDTH, ANIMATION_BAR_HEIGHT, DEFAULT_KEYFRAME_EASING, MIN_CLIP_DURATION_SECONDS, PLAYBACK_SPEED_PRESETS, DEFAULT_PLAYBACK_SPEED, PLAYBACK_SPEED_MIN, PLAYBACK_SPEED_MAX, PLAYBACK_SPEED_CLICK_STEP, PLAYBACK_SPEED_DRAG_SENSITIVITY_PER_PIXEL } from '../constants';
-import { PlusIcon, KeyframeIcon as AddKeyframeToTrackIcon, TrashIcon, ChevronUpDownIcon, GripVerticalIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, ListTreeIcon, SplineIcon, ChevronRightIcon, ChevronDownIconSolid, ChevronUpIcon, ChevronDownIcon } from './icons/EditorIcons';
+import { PlusIcon, KeyframeIcon as AddKeyframeToTrackIcon, TrashIcon, ChevronUpDownIcon, GripVerticalIcon, ZoomInIcon, ZoomOutIcon, MaximizeIcon, ListTreeIcon, SplineIcon, ChevronRightIcon, ChevronDownIconSolid, ChevronUpIcon, ChevronDownIcon, RepeatIcon, PlayOnceIcon } from './icons/EditorIcons';
 import { getElementAnimatableProperties, interpolateValue } from '../utils/animationUtils';
 import { AppContext } from '../contexts/AppContext';
 import TimelineContextualMenu from './TimelineContextualMenu';
@@ -137,7 +138,7 @@ const Timeline: React.FC<TimelineProps> = ({
   playbackControlsSlot,
 }) => {
   const { state, dispatch } = useContext(AppContext);
-  const { animation, currentTime, playbackSpeed, selectedElementId, elements, artboard, selectedTimelineContextItem, timelineViewMode, expandedGroupIds } = state;
+  const { animation, currentTime, playbackSpeed, selectedElementId, elements, artboard, selectedTimelineContextItem, timelineViewMode, expandedGroupIds, loopMode, isPlaying, playbackDirection, isAutoKeyframing } = state;
 
   const rulerMarkersContainerRef = useRef<HTMLDivElement>(null);
   const propertiesPaneRef = useRef<HTMLDivElement>(null);
@@ -146,6 +147,9 @@ const Timeline: React.FC<TimelineProps> = ({
   const speedInputRef = useRef<HTMLInputElement>(null); 
   const minimapRef = useRef<HTMLDivElement>(null);
   const minimapViewportRef = useRef<HTMLDivElement>(null);
+  const loopMenuRef = useRef<HTMLDivElement>(null);
+  const autoScrollIntervalRef = useRef<number | null>(null);
+  const lastMouseXRef = useRef<number>(0);
 
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
   const [draggingKeyframeInfo, setDraggingKeyframeInfo] = useState<DraggingKeyframeInfo | null>(null);
@@ -163,6 +167,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const [formattedSpeedInput, setFormattedSpeedInput] = useState<string>(`${playbackSpeed.toFixed(2)}x`); 
   const [draggingAdjustInfo, setDraggingAdjustInfo] = useState<DraggingAdjustInfo | null>(null); 
   const [isEditingSpeedInput, setIsEditingSpeedInput] = useState(false);
+  const [isLoopMenuOpen, setIsLoopMenuOpen] = useState(false);
 
 
   const [zoomLevel, setZoomLevel] = useState(1.0);
@@ -180,6 +185,19 @@ const Timeline: React.FC<TimelineProps> = ({
   const [editingContextualGroupDurationInfo, setEditingContextualGroupDurationInfo] = useState<EditingContextualGroupDurationInfo | null>(null);
   const [contextualGroupDurationInputValue, setContextualGroupDurationInputValue] = useState<string>('');
   const contextualGroupDurationInputRef = useRef<HTMLInputElement | null>(null);
+
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isLoopMenuOpen && loopMenuRef.current && !loopMenuRef.current.contains(event.target as Node)) {
+        setIsLoopMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isLoopMenuOpen]);
 
 
   useEffect(() => {
@@ -327,6 +345,29 @@ const Timeline: React.FC<TimelineProps> = ({
   }, [draggingAdjustInfo, handleValueAdjustDrag, onUpdateDuration, animation.duration, formattedSpeedInput, dispatch]);
 
 
+  useEffect(() => {
+    // This effect handles auto-scrolling the timeline during playback.
+    if (isPlaying && scrollableTracksAreaRef.current) {
+      const tracksArea = scrollableTracksAreaRef.current;
+      const scrollLeft = tracksArea.scrollLeft;
+      const clientWidth = tracksArea.clientWidth;
+      const scrubberX = currentTime * effectivePixelsPerSecond;
+
+      const scrollTriggerPoint = scrollLeft + clientWidth / 2;
+
+      // Determine if the scrubber has passed the center of the viewport in the direction of play.
+      const shouldScroll = 
+        (playbackDirection === 1 && scrubberX > scrollTriggerPoint) ||
+        (playbackDirection === -1 && scrubberX < scrollTriggerPoint);
+
+      if (shouldScroll) {
+        // Calculate the new scroll position to center the scrubber.
+        const newScrollLeft = scrubberX - clientWidth / 2;
+        tracksArea.scrollLeft = newScrollLeft; // The browser will clamp this value automatically.
+      }
+    }
+  }, [currentTime, isPlaying, effectivePixelsPerSecond, playbackDirection]);
+
 
   const selectedElement = elements.find(el => el.id === selectedElementId);
   const propertyGroupsForSelectedElement: TimelinePropertyUIGroup[] = selectedElement && timelineViewMode === 'contextual' ? TIMELINE_PROPERTY_GROUPS[selectedElement.type] : [];
@@ -411,15 +452,67 @@ const Timeline: React.FC<TimelineProps> = ({
   };
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDraggingScrubber && rulerMarkersContainerRef.current?.parentElement) {
-        handleRulerInteraction(e.clientX, rulerMarkersContainerRef.current.parentElement as HTMLDivElement);
+    const stopAutoScroll = () => {
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current);
+        autoScrollIntervalRef.current = null;
       }
     };
-    const handleMouseUp = () => { if (isDraggingScrubber) setIsDraggingScrubber(false); };
-    if (isDraggingScrubber) { document.addEventListener('mousemove', handleMouseMove); document.addEventListener('mouseup', handleMouseUp, { once: true }); }
-    return () => { document.removeEventListener('mousemove', handleMouseMove); document.removeEventListener('mouseup', handleMouseUp); };
+
+    const startAutoScroll = (direction: -1 | 1) => {
+      stopAutoScroll();
+
+      const scrollAmount = 15;
+      autoScrollIntervalRef.current = window.setInterval(() => {
+        const tracksArea = scrollableTracksAreaRef.current;
+        const rulerContainer = rulerMarkersContainerRef.current?.parentElement;
+        if (tracksArea && rulerContainer) {
+          tracksArea.scrollLeft += scrollAmount * direction;
+          handleRulerInteraction(lastMouseXRef.current, rulerContainer as HTMLDivElement);
+        }
+      }, 50);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      lastMouseXRef.current = e.clientX;
+      if (isDraggingScrubber && rulerMarkersContainerRef.current?.parentElement) {
+        handleRulerInteraction(e.clientX, rulerMarkersContainerRef.current.parentElement as HTMLDivElement);
+        
+        const tracksArea = scrollableTracksAreaRef.current;
+        if (!tracksArea) return;
+
+        const rect = tracksArea.getBoundingClientRect();
+        const scrollEdgeThreshold = 50; 
+
+        if (e.clientX < rect.left + scrollEdgeThreshold) {
+          startAutoScroll(-1);
+        } else if (e.clientX > rect.right - scrollEdgeThreshold) {
+          startAutoScroll(1);
+        } else {
+          stopAutoScroll();
+        }
+      }
+    };
+    
+    const handleMouseUp = () => {
+      if (isDraggingScrubber) {
+        setIsDraggingScrubber(false);
+        stopAutoScroll();
+      }
+    };
+    
+    if (isDraggingScrubber) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      stopAutoScroll();
+    };
   }, [isDraggingScrubber, handleRulerInteraction]);
+
 
   const handleVerticalScroll = useCallback((scrolledPane: 'left' | 'right') => {
     if (verticalScrollSyncLockRef.current) return;
@@ -908,48 +1001,48 @@ const Timeline: React.FC<TimelineProps> = ({
 
   const renderRulerMarkers = () => {
     const markers = [];
-    const rulerContainer = rulerMarkersContainerRef.current?.parentElement;
-    if (!rulerContainer || animation.duration <= 0) {
+    if (animation.duration <= 0) {
         markers.push(
             <div key="marker-0" style={{ left: `0px` }} className="absolute top-0 h-full flex flex-col items-center pointer-events-none">
-              <div className="w-px h-1/2 bg-[var(--glass-border-color)] opacity-60"></div>
-              <span className="text-xs text-text-secondary mt-px select-none">0s</span>
+              <div className="w-px h-2/3 bg-[var(--glass-border-color)] opacity-70" />
+              <span className="text-xs text-text-secondary mt-0.5 select-none">0s</span>
             </div>
           );
         return markers;
     }
 
-    const scrollLeft = rulerContainer.scrollLeft;
-    const clientWidth = rulerContainer.clientWidth;
-    
     const majorMarkerInterval = getRulerMajorMarkerInterval(effectivePixelsPerSecond, animation.duration);
     const subdivisionCount = getRulerSubdivisionCount(majorMarkerInterval, effectivePixelsPerSecond);
+    
+    // Use an integer-based loop to avoid floating point precision errors with time
+    const numMajorMarkers = Math.ceil(animation.duration / majorMarkerInterval);
 
-    const visibleStartTime = Math.max(0, (scrollLeft / effectivePixelsPerSecond) - majorMarkerInterval); 
-    const visibleEndTime = Math.min(animation.duration + majorMarkerInterval, ((scrollLeft + clientWidth) / effectivePixelsPerSecond) + majorMarkerInterval); 
-
-    const firstMajorMarkerTime = Math.floor(visibleStartTime / majorMarkerInterval) * majorMarkerInterval;
-
-    for (let time = firstMajorMarkerTime; time <= visibleEndTime; time += majorMarkerInterval) {
-        if (time > animation.duration + majorMarkerInterval / 2 && time > 0) break; 
+    for (let i = 0; i <= numMajorMarkers; i++) {
+        const time = i * majorMarkerInterval;
+        // Don't render markers significantly past the end of the timeline duration.
+        if (time > animation.duration + majorMarkerInterval * 0.1) continue;
+        
         const xPos = time * effectivePixelsPerSecond;
-        if (xPos > timelineContentWidth + 50 && time > 0) break; 
+        if (xPos > timelineContentWidth + 100) continue; // Performance safeguard
 
         const formattedTime = formatTimeForRulerDisplay(time, majorMarkerInterval, animation.duration);
         markers.push(
-            <div key={`marker-${time.toFixed(3)}`} style={{ left: `${xPos}px` }} className="absolute top-0 h-full flex flex-col items-center pointer-events-none">
-              <div className="w-px h-2/3 bg-[var(--glass-border-color)] opacity-70"></div> 
+            <div key={`marker-${i}`} style={{ left: `${xPos}px` }} className="absolute top-0 h-full flex flex-col items-center pointer-events-none">
+              <div className="w-px h-2/3 bg-[var(--glass-border-color)] opacity-70" />
               <span className="text-xs text-text-secondary mt-0.5 select-none">{formattedTime}</span>
             </div>
         );
+
+        // Don't draw subdivisions for the very last major marker if they would go past the duration.
+        if (i === numMajorMarkers) continue;
 
         if (subdivisionCount > 0) {
             const subInterval = majorMarkerInterval / subdivisionCount;
             for (let j = 1; j < subdivisionCount; j++) {
                 const subTime = time + j * subInterval;
-                if (subTime < animation.duration + subInterval/2 && subTime < visibleEndTime && subTime > visibleStartTime - subInterval/2 && subTime > 0) { 
+                if (subTime < animation.duration + subInterval * 0.1) {
                     markers.push(
-                        <div key={`submarker-${subTime.toFixed(3)}`} style={{ left: `${subTime * effectivePixelsPerSecond}px` }} className="absolute top-0 h-1/3 w-px bg-[var(--glass-border-color)] opacity-40 pointer-events-none"></div>
+                        <div key={`submarker-${i}-${j}`} style={{ left: `${subTime * effectivePixelsPerSecond}px` }} className="absolute top-0 h-1/3 w-px bg-[var(--glass-border-color)] opacity-40 pointer-events-none" />
                     );
                 }
             }
@@ -1125,9 +1218,9 @@ const Timeline: React.FC<TimelineProps> = ({
  }, [isDraggingMinimapViewport, isResizingMinimapViewport, minimapViewportDragStart, minimapViewportResizeStart, animation.duration, effectivePixelsPerSecond, timelineContentWidth, zoomLevel, basePixelsPerSecond]);
 
 
-  const viewModeButtonClass = (mode: TimelineViewMode) =>
+  const viewModeButtonClass = (isActive: boolean) =>
     `p-1.5 glass-button !rounded-md
-     ${timelineViewMode === mode
+     ${isActive
         ? '!bg-[rgba(var(--accent-rgb),0.25)] !text-accent-color !border-accent-color shadow-[var(--highlight-glow)]'
         : 'hover:!bg-[rgba(var(--accent-rgb),0.1)] hover:!border-[var(--glass-highlight-border)]'}`;
 
@@ -1332,20 +1425,50 @@ const Timeline: React.FC<TimelineProps> = ({
 
   const isSpeedPresetSelected = PLAYBACK_SPEED_PRESETS.some(p => p.value === playbackSpeed);
 
+  const loopOptions: { id: LoopMode; label: string; icon: React.ReactNode }[] = [
+    { id: 'once', label: 'Play Once', icon: <PlayOnceIcon size={16} /> },
+    { id: 'repeat', label: 'Repeat', icon: <RepeatIcon size={16} /> },
+    { id: 'ping-pong', label: 'Ping-Pong', icon: <ChevronUpDownIcon size={16} /> },
+  ];
+  const currentLoopOption = loopOptions.find(opt => opt.id === loopMode) || loopOptions[0];
+
   return (
-    <div style={{ height: `${height}px` }} className="glass-panel flex flex-col select-none overflow-hidden p-0">
+    <div style={{ height: `${height}px` }} className="glass-panel flex flex-col select-none p-0">
       <div
         style={{ height: `${TOP_CONTROLS_BAR_HEIGHT}px` }}
-        className="relative flex items-center justify-between bg-[var(--dark-bg-secondary)] border-b border-[var(--glass-border-color)] shadow-sm text-sm p-2 rounded-t-[var(--border-radius-main)]"
+        className="flex items-center justify-between bg-[var(--dark-bg-secondary)] border-b border-[var(--glass-border-color)] shadow-sm text-sm p-2 rounded-t-[var(--border-radius-main)]"
       >
         <div className="flex items-center space-x-2">
-            
             <div className="flex items-center space-x-1">
-                <button onClick={() => dispatch({ type: 'SET_TIMELINE_VIEW_MODE', payload: 'dopesheet'})} className={viewModeButtonClass('dopesheet')} title="Dopesheet View">
+                <button onClick={() => dispatch({ type: 'SET_TIMELINE_VIEW_MODE', payload: 'dopesheet'})} className={viewModeButtonClass(timelineViewMode === 'dopesheet')} title="Dopesheet View">
                     <ListTreeIcon size={18} />
                 </button>
-                <button onClick={() => dispatch({ type: 'SET_TIMELINE_VIEW_MODE', payload: 'contextual'})} className={viewModeButtonClass('contextual')} title="Keyframes View (Contextual)">
+                <button onClick={() => dispatch({ type: 'SET_TIMELINE_VIEW_MODE', payload: 'contextual'})} className={viewModeButtonClass(timelineViewMode === 'contextual')} title="Keyframes View (Contextual)">
                     <SplineIcon size={18} />
+                </button>
+            </div>
+            <div className="h-5 border-l border-[var(--glass-border-color)] opacity-50 mx-2"></div>
+            {/* New Auto-Keyframe Switch */}
+            <div className="flex items-center space-x-2">
+                <label htmlFor="auto-keyframe-toggle" className="text-xs text-text-secondary cursor-pointer hover:text-text-primary transition-colors" title="Automatically create a keyframe when a property is changed.">
+                    Auto-Keyframe
+                </label>
+                <button
+                    id="auto-keyframe-toggle"
+                    onClick={() => dispatch({ type: 'TOGGLE_AUTO_KEYFRAMING' })}
+                    className={`relative inline-flex items-center h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent-color focus:ring-offset-2 focus:ring-offset-[var(--dark-bg-secondary)] 
+                        ${isAutoKeyframing 
+                            ? 'bg-[var(--glass-border-color)] border-b border-[var(--glass-border-color)] shadow-[0_0_10px_1px_rgba(var(--accent-rgb),0.7)]' 
+                            : 'bg-gray-600 border-gray-500'}`}
+                    role="switch"
+                    aria-checked={isAutoKeyframing}
+                >
+                    <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full 
+                        ${isAutoKeyframing ?'bg-[var(--accent-color)]'
+                        :'bg-gray-200'} shadow-lg ring-0 transition duration-200 ease-in-out ${isAutoKeyframing ? 'translate-x-4' : 'translate-x-0'}`}
+                    />
                 </button>
             </div>
             <div className="h-5 border-l border-[var(--glass-border-color)] opacity-50 ml-2"></div>
@@ -1410,13 +1533,38 @@ const Timeline: React.FC<TimelineProps> = ({
                  </div>
             </div>
         </div>
-
-        <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+        
+        <div className="flex items-center justify-center space-x-1.5">
             {playbackControlsSlot}
+            <div className="h-5 border-l border-[var(--glass-border-color)] opacity-50 ml-1"></div>
+            <div className="relative z-40" ref={loopMenuRef}>
+              <button onClick={() => setIsLoopMenuOpen(prev => !prev)} className="p-1.5 glass-button !rounded-md" title={`Loop mode: ${currentLoopOption.label}`}>
+                {currentLoopOption.icon}
+              </button>
+              {isLoopMenuOpen && (
+                <div className="absolute bottom-full mb-2 right-0 bg-dark-bg-tertiary border border-[var(--glass-border-color)] rounded-lg shadow-xl w-40 z-50">
+                  <ul className="py-1">
+                    {loopOptions.map(opt => (
+                      <li key={opt.id}>
+                        <button
+                          onClick={() => {
+                            dispatch({ type: 'SET_LOOP_MODE', payload: opt.id });
+                            setIsLoopMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center space-x-2 px-3 py-2 text-left text-sm hover:bg-[rgba(var(--accent-rgb),0.15)] transition-colors ${loopMode === opt.id ? 'text-accent-color' : 'text-text-primary'}`}
+                        >
+                          {opt.icon}
+                          <span>{opt.label}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
         </div>
 
         <div className="flex items-center space-x-1.5">
-            <div className="h-5 border-l border-[var(--glass-border-color)] opacity-50"></div>
             <button onClick={() => handleZoom('out')} title="Zoom Out (-)" className="p-1.5 glass-button !rounded-md"><ZoomOutIcon size={16}/></button>
             <div
                 ref={minimapRef}

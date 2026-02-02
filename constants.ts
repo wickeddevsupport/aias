@@ -59,6 +59,7 @@ export const DEFAULT_LINE_HEIGHT = 1.2; // Multiplier
 export const DEFAULT_TEXT_DECORATION = 'none'; // 'none', 'underline', 'line-through', 'underline line-through'
 export const DEFAULT_TEXT_WRAP: TextElementProps['wrap'] = 'word'; // Default wrap mode
 export const DEFAULT_TEXT_ALIGN_KONVA: TextElementProps['align'] = 'left'; // Default Konva alignment
+export const DEFAULT_TEXT_PATH_START_OFFSET = 0;
 
 
 // Image Element Defaults
@@ -488,27 +489,28 @@ export interface SliderConfig {
   step: number;
 }
 
-export const SLIDER_CONFIGS: Partial<Record<AnimatableProperty | 'width' | 'height' | 'motionPathOffsetX' | 'motionPathOffsetY' | 'cx' | 'cy' | 'r_radial' | 'fx' | 'fy' | 'fr_radial' | 'fontSize' | 'letterSpacing' | 'lineHeight', SliderConfig>> = {
-  x: { min: -200, max: 1000, step: 1 },
-  y: { min: -200, max: 800, step: 1 },
-  width: { min: 1, max: 800, step: 1 },
-  height: { min: 1, max: 600, step: 1 },
-  rx: { min: 1, max: 400, step: 1 }, 
-  ry: { min: 1, max: 300, step: 1 }, 
-  fontSize: { min: 1, max: 200, step: 1 },
-  letterSpacing: { min: -10, max: 50, step: 0.1 },
-  lineHeight: { min: 0.5, max: 3, step: 0.05 },
+export const SLIDER_CONFIGS: Partial<Record<AnimatableProperty | 'width' | 'height' | 'motionPathOffsetX' | 'motionPathOffsetY' | 'cx' | 'cy' | 'r_radial' | 'fx' | 'fy' | 'fr_radial' | 'fontSize' | 'letterSpacing' | 'lineHeight' | 'textPathStartOffset', SliderConfig>> = {
+  x: { min: -200, max: 2000, step: 1 },
+  y: { min: -200, max: 2000, step: 1 },
+  width: { min: 1, max: 4000, step: 1 },
+  height: { min: 1, max: 4000, step: 1 },
+  rx: { min: 1, max: 2000, step: 1 }, 
+  ry: { min: 1, max: 2000, step: 1 }, 
+  fontSize: { min: 1, max: 1000, step: 1 },
+  letterSpacing: { min: -100, max: 100, step: 0.1 },
+  lineHeight: { min: 0.1, max: 5, step: 0.05 },
   opacity: { min: 0, max: 1, step: 0.01 },
-  rotation: { min: -720, max: 720, step: 1 },
-  scale: { min: 0.01, max: 5, step: 0.01 },
-  skewX: { min: -45, max: 45, step: 1 }, // Added
-  skewY: { min: -45, max: 45, step: 1 }, // Added
-  strokeWidth: { min: 0, max: 30, step: 0.1 },
-  motionPathOffsetX: { min: -200, max: 200, step: 1 },
-  motionPathOffsetY: { min: -200, max: 200, step: 1 },
-  strokeDashoffset: { min: -1000, max: 1000, step: 1 }, // General default, can be overridden by dynamic config
+  rotation: { min: -3600, max: 3600, step: 1 },
+  scale: { min: 0.01, max: 100, step: 0.01 },
+  skewX: { min: -90, max: 90, step: 1 },
+  skewY: { min: -90, max: 90, step: 1 },
+  strokeWidth: { min: 0, max: 500, step: 0.1 },
+  motionPathOffsetX: { min: -1000, max: 1000, step: 1 },
+  motionPathOffsetY: { min: -1000, max: 1000, step: 1 },
+  strokeDashoffset: { min: -5000, max: 5000, step: 1 },
   drawStartPercent: { min: 0, max: 1, step: 0.01 },
   drawEndPercent: { min: 0, max: 1, step: 0.01 },
+  textPathStartOffset: { min: 0, max: 1, step: 0.01 },
   // For Radial Gradient Editor (as percentages)
   cx: { min: -100, max: 200, step: 1 }, // %
   cy: { min: -100, max: 200, step: 1 }, // %

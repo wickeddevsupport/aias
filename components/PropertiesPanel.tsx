@@ -1,4 +1,5 @@
 
+
 import React, { useContext, useCallback, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { SVGElementData, AnimatableProperty, PathElementProps, AnimationTrack, Artboard, GroupElementProps, RectElementProps, CircleElementProps, AnySVGGradient, BezierPoint, AppState, AppAction, TextElementProps, ImageElementProps } from '../types';
@@ -18,7 +19,7 @@ import MotionPathSection from './panels/props_panel/MotionPathSection';
 import TextOnPathSection from './panels/props_panel/TextOnPathSection';
 import DrawEffectSection from './panels/props_panel/DrawEffectSection';
 import ArtboardDetailsSection from './panels/props_panel/ArtboardDetailsSection';
-import { ScrollTextIcon, DownloadIcon, GripVerticalIcon } from './icons/EditorIcons';
+import { ScrollTextIcon, DownloadIcon, GripVerticalIcon, ChevronDownIconSolid } from './icons/EditorIcons';
 import PropertyInput from '../PropertyInput'; // PropertyInput needs to be styled separately
 
 
@@ -95,18 +96,34 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   const { state, dispatch } = useContext(AppContext) as { state: AppState, dispatch: React.Dispatch<AppAction> };
   const { currentTime, elements: allContextElements, isHistoryPanelOpen, selectedElementId } = state;
   const historyButtonRef = useRef<HTMLButtonElement>(null);
+  const exportButtonRef = useRef<HTMLDivElement>(null);
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     'Info': true, 'Transform': false, 'Appearance': false, 'Text Properties': false,
     'Text Path': false, 'Image Properties': false, 'Geometry': false,
     'Motion Path': false, 'Draw SVG Effect': false, 'Artboard Details': false,
   });
+  
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
   const [shapePathLength, setShapePathLength] = useState<number | undefined>(undefined);
   const [sectionOrder, setSectionOrder] = useState<string[]>(DEFAULT_SECTION_ORDER);
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
   const [dropIndicator, setDropIndicator] = useState<{ targetId: string; position: 'before' | 'after' } | null>(null);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportButtonRef.current && !exportButtonRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    if (isExportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExportMenuOpen]);
 
   useEffect(() => {
     if (elementFromState && (elementFromState.type === 'path' || elementFromState.type === 'rect' || elementFromState.type === 'circle')) {
@@ -265,9 +282,38 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
           <ScrollTextIcon size={18} className="mr-2" />
           History
         </button>
-        <button onClick={onExport} className={`${topBarButtonClass} !bg-[rgba(var(--accent-rgb),0.1)] hover:!bg-[rgba(var(--accent-rgb),0.2)] !border-[var(--glass-highlight-border)]`} title="Export Animation to HTML">
-          <DownloadIcon size={18} className="mr-2" /> Export
-        </button>
+        <div ref={exportButtonRef} className="relative flex-1">
+          <button
+            onClick={() => setIsExportMenuOpen(prev => !prev)}
+            className={`${topBarButtonClass} w-full !bg-[rgba(var(--accent-rgb),0.1)] hover:!bg-[rgba(var(--accent-rgb),0.2)] !border-[var(--glass-highlight-border)] flex justify-between`}
+            title="Export Options"
+            aria-haspopup="true"
+            aria-expanded={isExportMenuOpen}
+          >
+            <div className="flex items-center">
+              <DownloadIcon size={18} className="mr-2" />
+              <span>Export</span>
+            </div>
+            <ChevronDownIconSolid size={16} className={`transition-transform ${isExportMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isExportMenuOpen && (
+            <div className="absolute top-full right-0 mt-1 z-20 w-full glass-panel !rounded-lg overflow-hidden shadow-lg border border-[var(--glass-border-color)]">
+              <ul className="py-1">
+                <li>
+                  <button
+                    onClick={() => {
+                      onExport();
+                      setIsExportMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-text-primary hover:bg-[rgba(var(--accent-rgb),0.15)] transition-colors"
+                  >
+                    Export to HTML
+                  </button>
+                </li>
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="p-3 space-y-3 overflow-y-auto custom-scrollbar flex-grow">
@@ -341,4 +387,3 @@ const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
 };
 
 export default PropertiesPanel;
-
