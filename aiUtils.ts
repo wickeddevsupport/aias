@@ -19,6 +19,7 @@ interface AiPromptElementInput {
   height?: number; 
   r?: number; 
   d?: string; 
+  href?: string;
 }
 
 interface AiPromptPathReference {
@@ -100,6 +101,10 @@ function prepareElementForPrompt(element: SVGElementData): AiPromptElementInput 
         } else if (dStringForAI) {
             preparedElement.d = dStringForAI;
         }
+    } else if (restOfBase.type === 'image') {
+        preparedElement.width = (restOfBase as any).width;
+        preparedElement.height = (restOfBase as any).height;
+        preparedElement.href = (restOfBase as any).href;
     }
     return preparedElement;
 }

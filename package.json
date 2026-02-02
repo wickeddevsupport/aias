@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server.js",
+    "ai:regression": "node ai/regression.js"
   },
   "dependencies": {
     "react": "^19.1.0",

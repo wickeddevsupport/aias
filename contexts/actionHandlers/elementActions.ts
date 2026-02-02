@@ -114,6 +114,23 @@ export function handleAddElement(state: AppState, payload: Extract<AppAction, { 
         motionPathOffsetX: DEFAULT_MOTION_PATH_OFFSET_X, motionPathOffsetY: DEFAULT_MOTION_PATH_OFFSET_Y,
         ...(textInitialProps || {}), 
       } as TextElementProps;
+    } else if (newElementType === 'group') {
+      const groupInitialProps = initialProps as Partial<GroupElementProps> | undefined;
+      newElement = {
+        id: newId, artboardId: currentArtboardId, parentId: finalParentId, order: newElementOrder,
+        name: `${DEFAULT_GROUP_NAME} ${state.elements.filter(e => e.type === 'group').length + 1}`, type: 'group', ...baseElementDefaults,
+        x: groupInitialProps?.x ?? DEFAULT_GROUP_X,
+        y: groupInitialProps?.y ?? DEFAULT_GROUP_Y,
+        rotation: groupInitialProps?.rotation ?? DEFAULT_GROUP_ROTATION,
+        scale: groupInitialProps?.scale ?? DEFAULT_GROUP_SCALE,
+        skewX: groupInitialProps?.skewX ?? DEFAULT_GROUP_SKEW_X,
+        skewY: groupInitialProps?.skewY ?? DEFAULT_GROUP_SKEW_Y,
+        opacity: groupInitialProps?.opacity ?? DEFAULT_OPACITY,
+        motionPathId: null, alignToPath: false,
+        motionPathStart: DEFAULT_MOTION_PATH_START, motionPathEnd: DEFAULT_MOTION_PATH_END,
+        motionPathOffsetX: DEFAULT_MOTION_PATH_OFFSET_X, motionPathOffsetY: DEFAULT_MOTION_PATH_OFFSET_Y,
+        ...(groupInitialProps || {}),
+      } as GroupElementProps;
     } else if (newElementType === 'image') {
       newElement = {
         id: newId, artboardId: currentArtboardId, parentId: finalParentId, order: newElementOrder,

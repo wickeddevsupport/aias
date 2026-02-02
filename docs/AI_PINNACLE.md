@@ -11,7 +11,7 @@ This document defines how to evolve the current in-house AI from rule-based inte
 Given a prompt, the AI should:
 1) Generate a coherent **scene** (multiple elements with layout and style).
 2) Produce **timed animation sequences** that read as a story.
-3) Support **character rigs** (stick figures / vector puppets) with reusable motion presets.
+3) Support **character rigs** (stick figures / vector puppets / animated characters) with reusable motion presets.
 4) Provide consistent, validated **AppAction** output.
 
 ## Target Capabilities
@@ -107,4 +107,12 @@ Prompt: “A character walks across the screen”
 2) Implement one character rig + one walk cycle.
 3) Implement one full scene template with 3–5 elements.
 4) Add action validator + fallback safe scene.
+
+
+## Progress Update (2026-02-02)
+- Milestone 1: Expanded template library + planner mapping prompts to scenes, motion presets, and safe fallback scene.
+- Milestone 2: Added character rig (stick/robot/blob) with walk, wave, and idle presets plus scene + character composition.
+- Milestone 3: Added photo animation tier 1 (Ken Burns + parallax + palette-based gradients + optional silhouette).
+- Milestone 4: Added photo animation tier 2 (subject box overlay, layered motion, bounding box cues).
+- Milestone 5: Added AI prompt regression harness (ai/regression.js) and scoring output for guardrails.
 
