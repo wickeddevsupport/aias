@@ -328,13 +328,35 @@ const KonvaCanvasContainer = forwardRef<KonvaCanvasContainerHandles, KonvaCanvas
 
 
   const handleNodeDblClickInContainer = useCallback((e: Konva.KonvaEventObject<MouseEvent>, konvaNode: Konva.Node) => {
-    const elementId = konvaNode.id().replace('-hitbox', '').replace('-bg-hittarget','');
-    const clickedElementModel = stateRef.current.elements.find(el => el.id === elementId);
+    const stage = stageRefInternal.current;
+    if (stage) {
+        stage.setPointersPositions(e.evt);
+    }
+
+    let elementId = konvaNode.id().replace('-hitbox', '').replace('-bg-hittarget','');
+    let clickedElementModel = stateRef.current.elements.find(el => el.id === elementId);
+
+    if ((!clickedElementModel || clickedElementModel.type === 'group') && stage) {
+        const pointerPos = stage.getPointerPosition();
+        if (pointerPos) {
+            const intersections = stage.getAllIntersections(pointerPos);
+            const fallbackNode = intersections.find(node => {
+                const nodeId = node.id();
+                if (!nodeId || nodeId === artboardProp.id) return false;
+                if (node.name() === 'group-hit-background') return false;
+                return !!stateRef.current.elements.find(el => el.id === nodeId.replace('-hitbox','').replace('-bg-hittarget',''));
+            });
+            if (fallbackNode) {
+                elementId = fallbackNode.id().replace('-hitbox', '').replace('-bg-hittarget','');
+                clickedElementModel = stateRef.current.elements.find(el => el.id === elementId);
+            }
+        }
+    }
 
     if (!clickedElementModel) return;
     onDblClickAppProp(e, elementId, clickedElementModel);
 
-  }, [onDblClickAppProp]);
+  }, [onDblClickAppProp, artboardProp.id]);
 
 
   const handleKonvaPointerDownKonva = useCallback((e: Konva.KonvaEventObject<PointerEvent>, elementIdFromNodeArgument: string) => {

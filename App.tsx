@@ -1242,10 +1242,14 @@ const App: React.FC = () => {
     const isCtrlPressedCurrently = e.evt.ctrlKey || e.evt.metaKey;
 
     const clickedAnimatedElement = animatedElements.find(el => el.id === elementId) || clickedElementModelFromApp;
+    const clickedType = clickedAnimatedElement.type;
+    const toolAtClick = stateRefForCallbacks.current.currentTool;
+    const isBezierEditableType = clickedType === 'path' || clickedType === 'rect' || clickedType === 'circle';
+    const shouldEnterBezierEdit = isBezierEditableType && (toolAtClick === 'bezierPath' || toolAtClick === 'select' || toolAtClick === 'text');
 
     if (isCtrlPressedCurrently) {
         dispatch({ type: 'SET_SELECTED_ELEMENT_ID', payload: elementId });
-        if (clickedAnimatedElement.type !== 'path' || stateRefForCallbacks.current.currentTool !== 'bezierPath') {
+        if (clickedAnimatedElement.type !== 'path' || toolAtClick !== 'bezierPath') {
             if (stateRefForCallbacks.current.selectedBezierPointId || stateRefForCallbacks.current.activeControlPoint) {
                 dispatch({ type: 'SELECT_BEZIER_POINT', payload: { pathId: stateRefForCallbacks.current.selectedElementId || '', pointId: null } });
                 dispatch({ type: 'SET_ACTIVE_CONTROL_POINT', payload: null });
@@ -1264,12 +1268,12 @@ const App: React.FC = () => {
         return;
     }
     
-    if (stateRefForCallbacks.current.currentTool !== 'select' && stateRefForCallbacks.current.currentTool !== 'bezierPath') {
+    if (toolAtClick !== 'select' && toolAtClick !== 'bezierPath') {
         dispatch({ type: 'SET_CURRENT_TOOL', payload: 'select' });
     }
 
 
-    if (currentTool === 'bezierPath') {
+    if (toolAtClick === 'bezierPath') {
         if (clickedAnimatedElement.type === 'path') {
              if ((clickedAnimatedElement as PathElementProps).structuredPoints) {
                 const firstPointId = (clickedAnimatedElement as PathElementProps).structuredPoints![0]?.id || null;
@@ -1280,7 +1284,7 @@ const App: React.FC = () => {
         } else if (clickedAnimatedElement.type === 'rect' || clickedAnimatedElement.type === 'circle') {
             dispatch({ type: 'CONVERT_TO_EDITABLE_PATH', payload: { elementId: clickedAnimatedElement.id } });
         }
-    } else if (stateRefForCallbacks.current.currentTool === 'select' || stateRefForCallbacks.current.currentTool === 'text') { 
+    } else if (toolAtClick === 'select' || toolAtClick === 'text') { 
         if (clickedAnimatedElement.type === 'path' || clickedAnimatedElement.type === 'rect' || clickedAnimatedElement.type === 'circle') {
             dispatch({ type: 'SET_CURRENT_TOOL', payload: 'bezierPath' });
             if ((clickedAnimatedElement as PathElementProps).structuredPoints) {
@@ -1293,7 +1297,7 @@ const App: React.FC = () => {
     }
 
     const newlySelectedElementModel = animatedElements.find(el => el.id === elementId);
-    const toolAfterDblClick = (clickedAnimatedElement.type === 'path' && (stateRefForCallbacks.current.currentTool === 'select' || stateRefForCallbacks.current.currentTool === 'text')) ? 'bezierPath' : stateRefForCallbacks.current.currentTool;
+    const toolAfterDblClick = shouldEnterBezierEdit ? 'bezierPath' : toolAtClick;
 
     if (newlySelectedElementModel?.type !== 'path' || toolAfterDblClick !== 'bezierPath') {
         if (stateRefForCallbacks.current.selectedBezierPointId || stateRefForCallbacks.current.activeControlPoint) {
@@ -1301,7 +1305,7 @@ const App: React.FC = () => {
            dispatch({ type: 'SET_ACTIVE_CONTROL_POINT', payload: null });
        }
    }
-}, [dispatch, animatedElements, currentTool, activateOnCanvasTextEditor, stateRefForCallbacks]);
+}, [dispatch, animatedElements, activateOnCanvasTextEditor, stateRefForCallbacks]);
 
 
     useLayoutEffect(() => {

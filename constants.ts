@@ -152,8 +152,8 @@ export const PRESERVE_ASPECT_RATIO_OPTIONS = [
 // NEW DEFAULT ANIMATION CONSTANTS
 export const INITIAL_ARTBOARDS: Artboard[] = [
   {
-    id: 'artboard-spectacle-v1',
-    name: 'Visual Spectacle',
+    id: 'vector-maestro',
+    name: 'Vector Maestro',
     x: 0, y: 0, width: 800, height: 600,
     backgroundColor: '#1a202c', // Very dark blue-gray
     defs: { gradients: [] },
@@ -289,7 +289,7 @@ export const INITIAL_ELEMENTS: SVGElementData[] = [
   // 5. Title Text
   {
     id: 'title-text', artboardId: ARTBOARD_ID, type: 'text', name: 'Title Text', parentId: null, order: 4,
-    x: 400, y: 100, text: 'SPECTACLE', fontFamily: 'Impact, sans-serif', fontSize: 60, textAnchor: 'middle',
+    x: 400, y: 100, text: 'VECTOR MAESTRO', fontFamily: 'Impact, sans-serif', fontSize: 60, textAnchor: 'middle',
     fill: '#FFD700', stroke: '#000000', strokeWidth: 1, opacity: 1, rotation: 0, scale: 1, skewX: 0, skewY: 0, // Gold
     letterSpacing: DEFAULT_LETTER_SPACING, lineHeight: DEFAULT_LINE_HEIGHT, textDecoration: DEFAULT_TEXT_DECORATION,
     width: undefined, height: undefined, align: DEFAULT_TEXT_ALIGN_KONVA, wrap: DEFAULT_TEXT_WRAP, // Added new text defaults
