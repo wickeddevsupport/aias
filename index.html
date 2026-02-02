@@ -1,0 +1,290 @@
+<!-- this is index -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" /> 
+    <title>SVG Animation Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;600;700&family=Orbitron:wght@400;500;700&family=Manrope:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --accent-color: #0AFFAF; /* Electric Blue/Cyan */
+        --accent-rgb: 10, 255, 175; /* RGB for #0AFFAF */
+        --glass-bg: rgba(25, 30, 55, 0.25); /* Slightly bluish dark glass */
+        --glass-border-color: rgba(var(--accent-rgb), 0.15); /* Accent color based border, subtle */
+        --glass-highlight-border: rgba(var(--accent-rgb), 0.7);
+        --panel-blur: 10px;
+        --text-primary: #E8E8FF; /* Brighter, slightly cool white */
+        --text-secondary: #A8A8C0;
+        --text-placeholder: #707088;
+        --shadow-color-strong: rgba(0, 0, 0, 0.6);
+        --shadow-color-soft: rgba(0,0,0,0.3);
+        --highlight-glow: 0 0 10px 0px var(--accent-color);
+        --dark-bg-primary: #0D0F1A; /* Deep dark blue */
+        --dark-bg-secondary: #1A1D2B; /* Slightly lighter for depth */
+        --dark-bg-tertiary: #252A3F; /* For elements on secondary */
+        --border-radius-main: 16px;
+        --border-radius-inner: 10px;
+      }
+
+      body { 
+        margin: 0; 
+        font-family: 'Open Sans', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif; 
+        background: var(--dark-bg-primary);
+        color: var(--text-primary);
+        overscroll-behavior: none; 
+        touch-action: none; 
+        -webkit-user-select: none; 
+        -ms-user-select: none; 
+        user-select: none; 
+      }
+      #root { 
+        width: 100vw; 
+        height: 100vh; 
+        display: flex; 
+        flex-direction: column; 
+        touch-action: none;
+      }
+
+      /* Glass Panel Base Style */
+      .glass-panel {
+        background: var(--glass-bg);
+        backdrop-filter: blur(var(--panel-blur));
+        -webkit-backdrop-filter: blur(var(--panel-blur));
+        border: 1px solid var(--glass-border-color);
+        border-radius: var(--border-radius-main);
+        box-shadow: 0 8px 32px 0 var(--shadow-color-strong);
+      }
+
+      /* Glass Button Base Style */
+      .glass-button {
+        background: rgba(var(--accent-rgb), 0.05); /* Subtle accent in bg */
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+        border: 1px solid var(--glass-border-color);
+        border-radius: var(--border-radius-inner);
+        color: var(--text-primary);
+        transition: all 0.2s ease-in-out;
+        padding: 8px 12px; /* Default padding */
+        box-shadow: 0 2px 8px 0 rgba(var(--accent-rgb), 0.1);
+      }
+      .glass-button:hover {
+        background: rgba(var(--accent-rgb), 0.15);
+        border-color: var(--glass-highlight-border);
+        box-shadow: var(--highlight-glow);
+        color: var(--accent-color);
+      }
+      .glass-button:focus, .glass-button:focus-visible {
+        outline: none;
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.4), var(--highlight-glow);
+      }
+      .glass-button:disabled {
+        background: rgba(100, 100, 120, 0.1);
+        border-color: rgba(100, 100, 120, 0.2);
+        color: var(--text-placeholder);
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+       .glass-button.active { /* For toggle buttons */
+        background: rgba(var(--accent-rgb), 0.25);
+        border-color: var(--accent-color);
+        color: var(--accent-color);
+        box-shadow: var(--highlight-glow);
+      }
+
+
+      /* Custom scrollbar for futuristic look */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 10px; /* Slightly wider */
+        height: 10px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.02); /* Almost transparent */
+        border-radius: 5px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(var(--accent-rgb), 0.4); /* Accent color thumb */
+        border-radius: 5px;
+        border: 2px solid transparent; /* Creates padding around thumb */
+        background-clip: content-box;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(var(--accent-rgb), 0.6);
+      }
+      .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(var(--accent-rgb), 0.4) rgba(255,255,255,0.02);
+      }
+
+
+      /* Slider Styling */
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 6px; /* Thinner track */
+        background: rgba(255, 255, 255, 0.1); /* Translucent track */
+        border-radius: 3px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+        touch-action: pan-y;
+      }
+      input[type="range"]:hover {
+         background: rgba(255, 255, 255, 0.15);
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px; 
+        height: 20px; 
+        background: var(--accent-color);
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.7);
+        transition: transform 0.1s ease;
+      }
+      input[type="range"]::-webkit-slider-thumb:active {
+        transform: scale(1.1);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 20px; 
+        height: 20px; 
+        background: var(--accent-color);
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
+        box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.7);
+      }
+      input[type="range"]::-moz-range-track {
+        background: rgba(255, 255, 255, 0.1);
+        height: 6px;
+        border-radius: 3px;
+      }
+       input[type="range"]:disabled::-webkit-slider-thumb {
+        background: var(--text-placeholder);
+        box-shadow: none;
+      }
+      input[type="range"]:disabled::-moz-range-thumb {
+        background: var(--text-placeholder);
+        box-shadow: none;
+      }
+
+      /* Global Input/Textarea/Select Styling */
+      .glass-input, .glass-textarea, .glass-select {
+        background: rgba(var(--accent-rgb), 0.03); /* Very subtle tint */
+        border: 1px solid var(--glass-border-color);
+        color: var(--text-primary);
+        border-radius: var(--border-radius-inner);
+        padding: 8px 10px;
+        font-size: 0.875rem; /* 14px */
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .glass-input::placeholder, .glass-textarea::placeholder {
+        color: var(--text-placeholder);
+      }
+      .glass-input:focus, .glass-textarea:focus, .glass-select:focus {
+        outline: none;
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.2);
+      }
+      .glass-select { /* This styles the select box itself */
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%230AFFAF' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.7rem center;
+        background-size: 1em;
+        padding-right: 2.5rem; /* Make space for arrow */
+      }
+      
+      /* General styling for options within ANY select dropdown for dark mode visibility */
+      select option {
+        background-color: var(--dark-bg-secondary) !important; 
+        color: var(--text-primary) !important;
+        padding: 8px 10px; 
+      }
+      select option:hover { 
+        background-color: var(--dark-bg-tertiary) !important;
+      }
+      select option:checked {
+        background-color: rgba(var(--accent-rgb), 0.35) !important; /* Slightly more opaque for selection */
+        color: var(--dark-bg-primary) !important; /* Ensure DARK text color for selected option */
+      }
+
+
+      /* AI Chat Bubble Animation */
+      @keyframes fadeInAndUp {
+        from { opacity: 0; transform: translateY(20px) scale(0.95); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .animate-fade-in-up { animation: fadeInAndUp 0.3s ease-out forwards; }
+      
+      /* Cursors */
+      .cursor-pen { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%230AFFAF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>') 0 24, auto; }
+      .cursor-text-tool { cursor: text; }
+
+      /* On-Canvas Text Editor */
+      .on-canvas-text-editor {
+        position: absolute;
+        background-color: rgba(var(--accent-rgb), 0.05);
+        border: 1px solid var(--glass-highlight-border);
+        box-shadow: 0 2px 15px var(--shadow-color-soft);
+        z-index: 10000; 
+        padding: 4px; 
+        margin: 0px;
+        overflow: hidden; 
+        white-space: pre-wrap; 
+        word-wrap: break-word; 
+        box-sizing: border-box;
+        color: var(--text-primary);
+        resize: none; 
+        outline: none;
+        border-radius: 6px; 
+        transform-origin: top left; 
+        min-width: 1em;
+        min-height: 1.2em; 
+        caret-color: var(--accent-color);
+      }
+      .on-canvas-text-editor::selection {
+        background-color: var(--accent-color); 
+        color: var(--dark-bg-primary);
+      }
+
+      /* Tailwind JIT ensure these are available */
+      /* bg-gray-850 (will be var(--dark-bg-secondary) or similar) */
+      /* bg-gray-700 (will be var(--dark-bg-tertiary) or similar) */
+      /* ... etc. mapping old grays to new theme vars or specific rgba values */
+
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.0.1",
+    "react-colorful": "https://esm.sh/react-colorful@^5.6.1",
+    "colord": "https://esm.sh/colord@^2.9.3",
+    "colord/": "https://esm.sh/colord@^2.9.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.417.0",
+    "react-dom": "https://esm.sh/react-dom@^19.1.0",
+    "lucide-react/": "https://esm.sh/lucide-react@^0.511.0/",
+    "konva": "https://esm.sh/konva@9",
+    "konva/": "https://esm.sh/konva@9/",
+    "flubber": "https://esm.sh/flubber@^0.4.2",
+    "react-konva": "https://esm.sh/react-konva@^19.0.5"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

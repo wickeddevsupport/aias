@@ -1,0 +1,6 @@
+{
+  "name": "vm 21",
+  "description": "A web-based studio for creating and exporting SVG animations with a visual canvas, timeline, and keyframe controls. Features include basic shape drawing, property editing, motion path animation, and HTML export.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
