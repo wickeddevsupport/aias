@@ -5,6 +5,7 @@ import { buildPathDFromStructuredPoints } from './utils/pathUtils'; // Added imp
 
 let ai: GoogleGenAI | null = null;
 const API_KEY = process.env.API_KEY;
+const MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
 if (API_KEY) {
   try {
@@ -176,7 +177,7 @@ export const generateAnimationWithAI = async (
 
   try {
     const response: GenerateContentResponse = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-04-17", 
+      model: MODEL,
       contents: fullPrompt,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
