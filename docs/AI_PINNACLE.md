@@ -116,3 +116,28 @@ Prompt: “A character walks across the screen”
 - Milestone 4: Added photo animation tier 2 (subject box overlay, layered motion, bounding box cues).
 - Milestone 5: Added AI prompt regression harness (ai/regression.js) and scoring output for guardrails.
 
+## V2 Definition (Advanced Behavior)
+V2 should:
+1) Build a structured plan for every prompt (scene, layers, palette, beats, constraints).
+2) Generate full scenes from scratch with depth, props, and camera motion when requested.
+3) Treat paths/curves/blobs/Bezier shapes as first-class outputs.
+4) Add character rigs + reusable motion presets and place them into scenes.
+5) Support photo animation tiers (Ken Burns + parallax + subject layers).
+6) Validate all AppActions and fallback to safe scenes on invalid output.
+
+## V2 Status (2026-02-02)
+- Scene templates are grouped and camera-friendly with motion beats.
+- Planner includes beats, camera intent, weather overlays, and style selection.
+- Motion presets expanded (walk/wave/idle + bounce/spin/pulse fallback).
+- Path generator supports blobs, spirals, waves, stars, hearts, and zigzags.
+- Photo tier 1 + tier 2 presets with layered overlays and palette-based gradients.
+- Weather overlays (rain/snow) available via prompt cues.
+- Regression suite added for prompt validation.
+
+## V3 Readiness (Prep Checklist)
+- Prompt-to-Plan schema stabilization (explicit JSON schema + tests).
+- Higher-fidelity character rigs (limb constraints, IK-ish limits, pose library).
+- Semantic layout (rule-based composition with collision avoidance).
+- Richer photo pipeline (silhouette tracing + mask refinement).
+- Scoring + guardrails (quality thresholds with auto fallback tiers).
+

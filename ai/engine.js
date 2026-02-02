@@ -403,17 +403,96 @@ function buildCharacterWithMotion(plan) {
   } else {
     applyIdleMotion(actions, rig.parts, duration);
   }
-  return { summary: rig.summary, actions };
+  return { summary: rig.summary, actions, rootId: rig.parts?.groupId || null };
 }
 
 function mergeResults(results) {
   const actions = results.flatMap(result => result.actions || []);
   const summary = results.map(result => result.summary).filter(Boolean).join(' ');
-  return { summary, actions };
+  const rootIds = results.map(result => result.rootId).filter(Boolean);
+  return { summary, actions, rootIds };
+}
+
+function addCameraMotion(actions, targetId, plan) {
+  if (!targetId) return;
+  const duration = Math.max(2, plan.duration || 4);
+  const intro = plan.beats?.intro?.start ?? 0;
+  const settle = plan.beats?.settle?.end ?? duration;
+  const panX = plan.keywords.left ? -30 : plan.keywords.right ? 30 : 20;
+  const panY = plan.keywords.up ? -20 : plan.keywords.down ? 20 : 12;
+  const zoomStart = plan.keywords.zoom ? 1 : 1;
+  const zoomEnd = plan.keywords.zoom ? 1.08 : plan.keywords.pan ? 1.03 : 1;
+
+  actions.push(
+    { type: 'ADD_KEYFRAME', payload: { elementId: targetId, property: 'x', time: intro, value: 0 } },
+    { type: 'ADD_KEYFRAME', payload: { elementId: targetId, property: 'x', time: settle, value: panX, easing: 'ease-in-out' } },
+    { type: 'ADD_KEYFRAME', payload: { elementId: targetId, property: 'y', time: intro, value: 0 } },
+    { type: 'ADD_KEYFRAME', payload: { elementId: targetId, property: 'y', time: settle, value: panY, easing: 'ease-in-out' } },
+    { type: 'ADD_KEYFRAME', payload: { elementId: targetId, property: 'scale', time: intro, value: zoomStart } },
+    { type: 'ADD_KEYFRAME', payload: { elementId: targetId, property: 'scale', time: settle, value: zoomEnd, easing: 'ease-in-out' } }
+  );
+}
+
+function addWeatherOverlay(actions, plan, artboard, parentId, idFactory) {
+  if (!plan.weather) return;
+  const width = artboard.width;
+  const height = artboard.height;
+  const groupId = idFactory();
+
+  actions.push({
+    type: 'ADD_ELEMENT',
+    payload: { type: 'group', targetParentId: parentId || null, props: { id: groupId, x: 0, y: 0 } },
+  });
+
+  if (plan.weather === 'rain') {
+    const drops = 16;
+    for (let i = 0; i < drops; i += 1) {
+      const dropId = idFactory();
+      const x = (width * 0.1) + (i % 8) * (width * 0.1);
+      const y = (i % 2) * (height * 0.2);
+      actions.push({
+        type: 'ADD_ELEMENT',
+        payload: {
+          type: 'rect',
+          targetParentId: groupId,
+          props: { id: dropId, x, y, width: 2, height: height * 0.12, fill: 'rgba(148,163,184,0.6)' },
+        },
+      });
+      actions.push(
+        { type: 'ADD_KEYFRAME', payload: { elementId: dropId, property: 'y', time: 0, value: y - height * 0.2 } },
+        { type: 'ADD_KEYFRAME', payload: { elementId: dropId, property: 'y', time: plan.duration || 4, value: y + height * 0.8, easing: 'linear' } }
+      );
+    }
+  }
+
+  if (plan.weather === 'snow') {
+    const flakes = 14;
+    for (let i = 0; i < flakes; i += 1) {
+      const flakeId = idFactory();
+      const x = (width * 0.12) + (i % 7) * (width * 0.12);
+      const y = (i % 2) * (height * 0.2);
+      const r = 3 + (i % 3);
+      actions.push({
+        type: 'ADD_ELEMENT',
+        payload: {
+          type: 'circle',
+          targetParentId: groupId,
+          props: { id: flakeId, x, y, r, fill: 'rgba(248,250,252,0.9)' },
+        },
+      });
+      actions.push(
+        { type: 'ADD_KEYFRAME', payload: { elementId: flakeId, property: 'y', time: 0, value: y - 20 } },
+        { type: 'ADD_KEYFRAME', payload: { elementId: flakeId, property: 'y', time: plan.duration || 4, value: y + height * 0.7, easing: 'ease-in-out' } },
+        { type: 'ADD_KEYFRAME', payload: { elementId: flakeId, property: 'x', time: 0, value: x - 10 } },
+        { type: 'ADD_KEYFRAME', payload: { elementId: flakeId, property: 'x', time: plan.duration || 4, value: x + 10, easing: 'ease-in-out' } }
+      );
+    }
+  }
 }
 
 export function generateAiActions(payload) {
   const plan = buildPlan(payload);
+  const idFactory = createIdFactory();
   const results = [];
 
   if (plan.wantsPhoto) {
@@ -449,6 +528,12 @@ export function generateAiActions(payload) {
   }
 
   const composed = results.length > 0 ? mergeResults(results) : generateFallbackActions(payload);
+  const cameraTargetId = Array.isArray(composed.rootIds) ? composed.rootIds[0] : null;
+  if (plan.cameraMotion && cameraTargetId) {
+    addCameraMotion(composed.actions, cameraTargetId, plan);
+  }
+  addWeatherOverlay(composed.actions, plan, plan.artboard, cameraTargetId, idFactory);
+
   const validated = validateActions(composed.actions);
 
   if (!validated.ok && validated.actions.length === 0) {

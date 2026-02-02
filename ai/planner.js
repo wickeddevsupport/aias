@@ -83,6 +83,16 @@ export function buildPlan(payload) {
               ? 'flat'
               : 'default';
 
+  const duration = Math.max(2, animationDuration || 4);
+  const beats = {
+    intro: { start: 0, end: duration * 0.25 },
+    action: { start: duration * 0.25, end: duration * 0.8 },
+    settle: { start: duration * 0.8, end: duration },
+  };
+
+  const cameraMotion = !!(keywords.camera || keywords.pan || keywords.zoom || keywords.kenBurns || keywords.parallax);
+  const weather = keywords.rain ? 'rain' : keywords.snow ? 'snow' : null;
+
   const defaultPalettes = {
     sunset: ['#f97316', '#fbbf24', '#fb7185', '#0f172a'],
     ocean: ['#0ea5e9', '#38bdf8', '#0f172a', '#f8fafc'],
@@ -103,7 +113,8 @@ export function buildPlan(payload) {
     text,
     sceneType,
     layout,
-    duration: animationDuration,
+    duration,
+    beats,
     wantsScene,
     wantsCharacter,
     wantsPhoto,
@@ -111,6 +122,8 @@ export function buildPlan(payload) {
     wantsPhotoTier2: wantsPhoto && (keywords.subject || keywords.boundingBox || keywords.foreground || keywords.background),
     motionPreset,
     style,
+    cameraMotion,
+    weather,
     wantsCreate,
     targetSelected: !!elementToAnimate?.id,
     color: extractColor(text),

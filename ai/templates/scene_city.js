@@ -1,4 +1,4 @@
-import { addRect, addKeyframe, createIdFactory } from './utils.js';
+import { addRect, addKeyframe, addGroup, withParent, createIdFactory } from './utils.js';
 import { resolvePalette, resolveBackgroundFill } from './palette.js';
 
 export function buildCityScene(plan, artboard) {
@@ -8,8 +8,12 @@ export function buildCityScene(plan, artboard) {
   const height = artboard.height;
   const palette = resolvePalette(plan, ['#0b1020', '#1f2937', '#38bdf8', '#f8fafc']);
 
+  const sceneId = id();
   const skyId = id();
-  actions.push(addRect(skyId, 0, 0, width, height, resolveBackgroundFill(plan, palette, `${skyId}-grad`, 100)));
+  actions.push(
+    addGroup(sceneId, 0, 0),
+    withParent(addRect(skyId, 0, 0, width, height, resolveBackgroundFill(plan, palette, `${skyId}-grad`, 100)), sceneId)
+  );
 
   const buildingCount = 5;
   const baseY = height * 0.6;
@@ -22,7 +26,7 @@ export function buildCityScene(plan, artboard) {
     const bHeight = maxH * (0.5 + (i % 3) * 0.2);
     const x = i * step + step * 0.15;
     const y = baseY - bHeight;
-    actions.push(addRect(bId, x, y, bWidth, bHeight, palette[1] || '#1f2937'));
+    actions.push(withParent(addRect(bId, x, y, bWidth, bHeight, palette[1] || '#1f2937'), sceneId));
     actions.push(
       addKeyframe(bId, 'opacity', 0, 0),
       addKeyframe(bId, 'opacity', 1.5 + i * 0.2, 1)
@@ -32,5 +36,6 @@ export function buildCityScene(plan, artboard) {
   return {
     summary: 'Built a simple city skyline scene.',
     actions,
+    rootId: sceneId,
   };
 }

@@ -65,6 +65,10 @@ export function detectKeywords(text) {
     wave: /\b(wave|waving)\b/.test(t),
     idle: /\b(idle|breathing|still)\b/.test(t),
     float: /\b(float|drift|hover)\b/.test(t),
+    pan: /\b(pan|panning)\b/.test(t),
+    zoom: /\b(zoom|zooming)\b/.test(t),
+    camera: /\b(camera|cinematic|shot)\b/.test(t),
+    glow: /\b(glow|glowing|neon)\b/.test(t),
     left: /\bleft\b/.test(t),
     right: /\bright\b/.test(t),
     up: /\bup\b|\btop\b/.test(t),
@@ -119,11 +123,14 @@ export function detectKeywords(text) {
     minimal: /\b(minimal|clean|simple)\b/.test(t),
     flat: /\b(flat|2d)\b/.test(t),
     outline: /\b(outline|lineart|wireframe)\b/.test(t),
+    dark: /\b(dark|night|moody)\b/.test(t),
+    light: /\b(light|bright)\b/.test(t),
     photo: /\b(photo|photograph|image|picture|portrait|selfie)\b/.test(t),
     kenBurns: /\b(ken burns|pan and zoom|pan|zoom)\b/.test(t),
     parallax: /\b(parallax|depth)\b/.test(t),
     silhouette: /\b(silhouette|cutout)\b/.test(t),
     boundingBox: /\b(bounding box|bbox|selection box)\b/.test(t),
+    textOnPath: /\b(text on path|text along|label along|type on path)\b/.test(t),
   };
 }
 
