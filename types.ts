@@ -371,6 +371,13 @@ export interface AiPlanProgress {
   message?: string;
 }
 
+export interface AiAgentSettings {
+  enabled: boolean;
+  stepDelayMs: number;
+  showTargets: boolean;
+  showLiveActions: boolean;
+}
+
 export interface ImageAsset {
   id: string;
   type: 'image';
@@ -421,6 +428,9 @@ export interface AppState {
   aiLogs: AILogEntry[];
   aiPlan: AiPlan | null;
   aiPlanProgress: AiPlanProgress;
+  aiAgentSettings: AiAgentSettings;
+  aiLiveTargets: string[];
+  aiLiveActions: AppAction[];
   motionPathSelectionTargetElementId: string | null;
   textOnPathSelectionTargetElementId: string | null; 
   previewTarget: {
@@ -572,6 +582,9 @@ export type AppAction =
   | { type: 'SET_AI_PLAN'; payload: AiPlan | null }
   | { type: 'SET_AI_PLAN_PROGRESS'; payload: AiPlanProgress }
   | { type: 'CLEAR_AI_PLAN' }
+  | { type: 'SET_AI_AGENT_SETTINGS'; payload: Partial<AiAgentSettings> }
+  | { type: 'SET_AI_LIVE_TARGETS'; payload: string[] }
+  | { type: 'SET_AI_LIVE_ACTIONS'; payload: AppAction[] }
   | { type: 'EXECUTE_AI_ACTIONS_BATCH', payload: { actions: AppAction[], log: string } }
   | { type: 'SET_MOTION_PATH_SELECTION_TARGET'; payload: string | null }
   | { type: 'ASSIGN_MOTION_PATH'; payload: { elementId: string; pathId: string | null } }

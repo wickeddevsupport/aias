@@ -8,7 +8,7 @@ interface MaestroPanelProps {
 
 const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => {
   const { state, dispatch } = useContext(AppContext);
-  const { aiLogs, aiPrompt, isAiLoading, aiError, selectedElementId, elements, artboard, aiPlan, aiPlanProgress } = state;
+  const { aiLogs, aiPrompt, isAiLoading, aiError, selectedElementId, elements, artboard, aiPlan, aiPlanProgress, aiAgentSettings, aiLiveActions, aiLiveTargets } = state;
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,6 +28,15 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
   const handleAiPromptChange = (prompt: string) => {
     dispatch({ type: 'SET_AI_PROMPT', payload: prompt });
   };
+
+  const updateAgentSettings = (payload: Partial<{ enabled: boolean; stepDelayMs: number; showTargets: boolean; showLiveActions: boolean }>) => {
+    dispatch({ type: 'SET_AI_AGENT_SETTINGS', payload });
+  };
+
+  const clearLiveFeedback = () => {
+    dispatch({ type: 'SET_AI_LIVE_ACTIONS', payload: [] });
+    dispatch({ type: 'SET_AI_LIVE_TARGETS', payload: [] });
+  };
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !isAiLoading && aiPrompt.trim()) {
@@ -44,12 +53,26 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
     }
   }
 
+  const agentSettings = aiAgentSettings || { enabled: true, stepDelayMs: 150, showTargets: true, showLiveActions: true };
   const currentPlanStepIndex = aiPlanProgress?.currentStepIndex ?? -1;
   const currentPlanStep = aiPlan?.steps?.[currentPlanStepIndex];
   const nextPlanStep = aiPlan?.steps?.[currentPlanStepIndex + 1];
   const currentActionTypes = currentPlanStep?.actions
     ? Array.from(new Set(currentPlanStep.actions.map(action => action.type))).slice(0, 5)
     : [];
+  const liveActionCounts = aiLiveActions.reduce<Record<string, number>>((acc, action) => {
+    acc[action.type] = (acc[action.type] || 0) + 1;
+    return acc;
+  }, {});
+  const liveActionEntries = Object.entries(liveActionCounts).slice(0, 8);
+  const liveTargetCount = aiLiveTargets.length;
+
+  const toggleButtonClass = (isOn: boolean) =>
+    `relative inline-flex items-center h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent-color focus:ring-offset-2 focus:ring-offset-[var(--dark-bg-secondary)] 
+    ${isOn ? 'bg-[var(--glass-border-color)] border-b border-[var(--glass-border-color)] shadow-[0_0_10px_1px_rgba(var(--accent-rgb),0.7)]' : 'bg-gray-600 border-gray-500'}`;
+
+  const toggleKnobClass = (isOn: boolean) =>
+    `pointer-events-none inline-block h-4 w-4 transform rounded-full ${isOn ? 'bg-[var(--accent-color)]' : 'bg-gray-200'} shadow-lg ring-0 transition duration-200 ease-in-out ${isOn ? 'translate-x-4' : 'translate-x-0'}`;
 
   return (
     <div className="p-3 space-y-3 h-full max-h-[95%] flex flex-col bg-transparent">
@@ -60,11 +83,82 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
       <div className="flex-shrink-0 text-xs text-text-secondary border border-dashed border-[var(--glass-border-color)] p-2 rounded-md">
         <strong>Context:</strong> <span className="text-accent-color font-semibold">{selectedElementName}</span>
       </div>
+      <div className="flex-shrink-0 border border-[var(--glass-border-color)] rounded-md p-2 bg-[rgba(var(--accent-rgb),0.03)]">
+        <div className="flex items-center justify-between text-xs text-text-secondary">
+          <span className="font-semibold text-accent-color">Agent Controls</span>
+          <button
+            onClick={clearLiveFeedback}
+            className="text-[10px] px-2 py-0.5 rounded border border-[var(--glass-border-color)] text-text-secondary hover:text-text-primary hover:border-[var(--glass-highlight-border)] transition-colors"
+            type="button"
+          >
+            Clear Live
+          </button>
+        </div>
+        <div className="mt-2 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-secondary">Agent Mode</span>
+            <button
+              onClick={() => updateAgentSettings({ enabled: !agentSettings.enabled })}
+              className={toggleButtonClass(agentSettings.enabled)}
+              role="switch"
+              aria-checked={agentSettings.enabled}
+              type="button"
+            >
+              <span aria-hidden="true" className={toggleKnobClass(agentSettings.enabled)} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <label htmlFor="ai-step-delay" className="text-text-secondary">Step Pace</label>
+            <div className="flex items-center space-x-2">
+              <input
+                id="ai-step-delay"
+                type="range"
+                min={0}
+                max={800}
+                step={25}
+                value={agentSettings.stepDelayMs}
+                onChange={(e) => updateAgentSettings({ stepDelayMs: Number(e.target.value) })}
+                className="w-24 accent-accent-color"
+              />
+              <span className="text-[10px] text-text-placeholder">{agentSettings.stepDelayMs} ms</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-secondary">Show Live Targets</span>
+            <button
+              onClick={() => updateAgentSettings({ showTargets: !agentSettings.showTargets })}
+              className={toggleButtonClass(agentSettings.showTargets)}
+              role="switch"
+              aria-checked={agentSettings.showTargets}
+              type="button"
+            >
+              <span aria-hidden="true" className={toggleKnobClass(agentSettings.showTargets)} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-text-secondary">Show Live Actions</span>
+            <button
+              onClick={() => updateAgentSettings({ showLiveActions: !agentSettings.showLiveActions })}
+              className={toggleButtonClass(agentSettings.showLiveActions)}
+              role="switch"
+              aria-checked={agentSettings.showLiveActions}
+              type="button"
+            >
+              <span aria-hidden="true" className={toggleKnobClass(agentSettings.showLiveActions)} />
+            </button>
+          </div>
+        </div>
+      </div>
       {aiPlan && (
         <div className="flex-shrink-0 border border-[var(--glass-border-color)] rounded-md p-2 bg-[rgba(var(--accent-rgb),0.04)]">
           <div className="flex items-center justify-between text-xs text-text-secondary">
             <span className="font-semibold text-accent-color">Live Plan</span>
-            <span>{aiPlanProgress.status === 'running' ? 'Executing...' : aiPlanProgress.status === 'done' ? 'Done' : 'Idle'}</span>
+            <div className="flex items-center space-x-2 text-[10px]">
+              {agentSettings.showTargets && (
+                <span className="text-text-placeholder">Targets: {liveTargetCount}</span>
+              )}
+              <span>{aiPlanProgress.status === 'running' ? 'Executing...' : aiPlanProgress.status === 'done' ? 'Done' : 'Idle'}</span>
+            </div>
           </div>
           <p className="text-xs text-text-primary mt-1">{aiPlan.summary}</p>
           <div className="mt-2 space-y-1">
@@ -75,7 +169,7 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
                 <div key={step.id} className={`flex items-center justify-between text-xs p-1.5 rounded ${isCurrent ? 'bg-[rgba(var(--accent-rgb),0.12)] text-text-primary' : 'text-text-secondary'}`}>
                   <div className="flex items-center space-x-2">
                     <span className={`inline-flex w-4 h-4 items-center justify-center rounded-full border ${isCompleted ? 'border-green-400 text-green-400' : isCurrent ? 'border-accent-color text-accent-color' : 'border-[var(--glass-border-color)] text-text-secondary'}`}>
-                      {isCompleted ? '✓' : index + 1}
+                      {isCompleted ? 'OK' : index + 1}
                     </span>
                     <span className="font-medium">{step.title}</span>
                   </div>
@@ -103,6 +197,21 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
               <strong>Next:</strong> {nextPlanStep.title}
             </div>
           )}
+        </div>
+      )}
+      {agentSettings.showLiveActions && liveActionEntries.length > 0 && (
+        <div className="flex-shrink-0 border border-[var(--glass-border-color)] rounded-md p-2 bg-[rgba(var(--accent-rgb),0.03)]">
+          <div className="text-xs text-text-secondary flex items-center justify-between">
+            <span className="font-semibold text-accent-color">Live Actions</span>
+            <span className="text-[10px] text-text-placeholder">{liveActionEntries.length} types</span>
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {liveActionEntries.map(([type, count]) => (
+              <span key={type} className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(var(--accent-rgb),0.12)] text-accent-color">
+                {type}{count > 1 ? ` x${count}` : ''}
+              </span>
+            ))}
+          </div>
         </div>
       )}
       {/* Log Area */}

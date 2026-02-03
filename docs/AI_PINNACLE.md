@@ -147,3 +147,8 @@ V2 should:
 - Live UX: Maestro panel shows plan, current step, and next step while actions execute.
 - Autonomous chaining: steps execute sequentially with validation and live canvas updates.
 
+## UX Enhancements (2026-02-03)
+- Agent controls in Maestro panel: agent mode toggle, step pace slider, and live toggles.
+- Live targets highlight: active AI targets glow on the canvas during step execution.
+- Live actions list: current step action types are shown while the plan runs.
+

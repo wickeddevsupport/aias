@@ -46,6 +46,7 @@ const App: React.FC = () => {
     playbackSpeed,
     isPlaying,
     aiPrompt,
+    aiAgentSettings,
     motionPathSelectionTargetElementId,
     textOnPathSelectionTargetElementId,
     previewTarget,
@@ -985,11 +986,93 @@ const App: React.FC = () => {
     dispatch({ type: 'SET_AI_LOADING', payload: true });
     dispatch({ type: 'SET_AI_ERROR', payload: null });
     dispatch({ type: 'CLEAR_AI_PLAN' });
-    
+
     try {
+      const agentSettings = aiAgentSettings || { enabled: true, stepDelayMs: 150, showTargets: true, showLiveActions: true };
+      const stepDelayMs = Math.max(0, agentSettings.stepDelayMs || 0);
+      const showTargets = !!agentSettings.showTargets;
+      const showLiveActions = !!agentSettings.showLiveActions;
+
+      const getTargetIdsForActions = (actions: AppAction[]) => {
+        const targets = new Set<string>();
+        actions.forEach(action => {
+          switch (action.type) {
+            case 'ADD_ELEMENT':
+              if (action.payload?.props && typeof action.payload.props.id === 'string') targets.add(action.payload.props.id);
+              break;
+            case 'UPDATE_ELEMENT_PROPS':
+            case 'UPDATE_ELEMENT_NAME':
+            case 'DELETE_ELEMENT':
+            case 'BRING_TO_FRONT':
+            case 'SEND_TO_BACK':
+            case 'BRING_FORWARD':
+            case 'SEND_BACKWARD':
+              if (typeof (action as any).payload === 'string') targets.add((action as any).payload);
+              else if (typeof (action as any).payload?.id === 'string') targets.add((action as any).payload.id);
+              break;
+            case 'UPDATE_ELEMENT_TRANSFORM':
+              targets.add(action.payload.elementId);
+              break;
+            case 'ADD_KEYFRAME':
+            case 'REMOVE_KEYFRAME':
+            case 'UPDATE_KEYFRAME_TIME':
+            case 'UPDATE_KEYFRAME_PROPERTIES':
+            case 'SCALE_KEYFRAME_GROUP_TIMES':
+            case 'SHIFT_ELEMENT_ANIMATION_TIMES':
+            case 'SHIFT_PROPERTY_GROUP_TIMES':
+            case 'UPDATE_ANIMATION_FROM_AI':
+              targets.add(action.payload.elementId);
+              break;
+            case 'REPARENT_ELEMENT':
+              targets.add(action.payload.elementId);
+              if (action.payload.newParentId) targets.add(action.payload.newParentId);
+              break;
+            case 'MOVE_ELEMENT_IN_HIERARCHY':
+              targets.add(action.payload.draggedId);
+              if (action.payload.targetId) targets.add(action.payload.targetId);
+              break;
+            case 'GROUP_ELEMENT':
+              targets.add(action.payload.elementId);
+              break;
+            case 'UNGROUP_ELEMENT':
+              targets.add(action.payload.groupId);
+              break;
+            case 'ASSIGN_MOTION_PATH':
+              targets.add(action.payload.elementId);
+              if (action.payload.pathId) targets.add(action.payload.pathId);
+              break;
+            case 'ASSIGN_TEXT_PATH':
+              targets.add(action.payload.textElementId);
+              if (action.payload.pathElementId) targets.add(action.payload.pathElementId);
+              break;
+            default:
+              break;
+          }
+        });
+        return Array.from(targets);
+      };
+
+      const setLiveFeedback = (actions: AppAction[]) => {
+        if (showLiveActions) {
+          dispatch({ type: 'SET_AI_LIVE_ACTIONS', payload: actions });
+        } else {
+          dispatch({ type: 'SET_AI_LIVE_ACTIONS', payload: [] });
+        }
+        if (showTargets) {
+          dispatch({ type: 'SET_AI_LIVE_TARGETS', payload: getTargetIdsForActions(actions) });
+        } else {
+          dispatch({ type: 'SET_AI_LIVE_TARGETS', payload: [] });
+        }
+      };
+
+      const clearLiveFeedback = () => {
+        dispatch({ type: 'SET_AI_LIVE_ACTIONS', payload: [] });
+        dispatch({ type: 'SET_AI_LIVE_TARGETS', payload: [] });
+      };
+
       // The AI can now handle creation, so we don't need to check for a selected element here.
       const elementToAnimate = selectedElementId === artboard.id ? null : elements.find(el => el.id === selectedElementId) || null;
-      
+
       const result: AIGenerationResult = await generateAiActions(
         elementToAnimate,
         aiPrompt,
@@ -998,35 +1081,60 @@ const App: React.FC = () => {
         elements,
         currentTime,
       );
-      
+
       dispatch({ type: 'ADD_AI_LOG', payload: result.log });
 
       if (result.plan && result.plan.steps && result.plan.steps.length > 0) {
         dispatch({ type: 'SET_AI_PLAN', payload: result.plan });
-        dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'running', currentStepIndex: -1 } });
-        for (let i = 0; i < result.plan.steps.length; i += 1) {
-          const step = result.plan.steps[i];
-          dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'running', currentStepIndex: i, message: step.title } });
-          if (step.actions && step.actions.length > 0) {
+        const planSummary = result.plan.summary || result.log.message || 'AI plan';
+        const flattenedActions = result.plan.steps.flatMap(step => step.actions || []);
+
+        if (!agentSettings.enabled) {
+          if (flattenedActions.length > 0) {
+            setLiveFeedback(flattenedActions);
             dispatch({
               type: 'EXECUTE_AI_ACTIONS_BATCH',
               payload: {
-                actions: step.actions,
-                log: `${result.plan.summary} • ${step.title}`,
+                actions: flattenedActions,
+                log: planSummary,
               },
             });
+            clearLiveFeedback();
           }
-          await new Promise(resolve => setTimeout(resolve, 120));
+          dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'done', currentStepIndex: result.plan.steps.length - 1 } });
+        } else {
+          dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'running', currentStepIndex: -1 } });
+          for (let i = 0; i < result.plan.steps.length; i += 1) {
+            const step = result.plan.steps[i];
+            const stepActions = step.actions || [];
+            dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'running', currentStepIndex: i, message: step.title } });
+            setLiveFeedback(stepActions);
+            if (stepActions.length > 0) {
+              dispatch({
+                type: 'EXECUTE_AI_ACTIONS_BATCH',
+                payload: {
+                  actions: stepActions,
+                  log: `${planSummary} - ${step.title}`,
+                },
+              });
+            }
+            if (stepDelayMs > 0) {
+              await new Promise(resolve => setTimeout(resolve, stepDelayMs));
+            }
+          }
+          dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'done', currentStepIndex: result.plan.steps.length - 1 } });
+          clearLiveFeedback();
         }
-        dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'done', currentStepIndex: result.plan.steps.length - 1 } });
       } else if (result.actions && result.actions.length > 0) {
-        dispatch({ 
-          type: 'EXECUTE_AI_ACTIONS_BATCH', 
+        setLiveFeedback(result.actions);
+        dispatch({
+          type: 'EXECUTE_AI_ACTIONS_BATCH',
           payload: {
             actions: result.actions,
             log: result.log.message,
           }
         });
+        clearLiveFeedback();
       } else {
         if(result.log.status === 'error') {
           dispatch({ type: 'SET_AI_ERROR', payload: result.log.message });
@@ -1037,6 +1145,8 @@ const App: React.FC = () => {
       const userFriendlyError = "An unexpected error occurred. Please try again or check the console for details.";
       dispatch({ type: 'SET_AI_ERROR', payload: userFriendlyError });
       dispatch({ type: 'SET_AI_PLAN_PROGRESS', payload: { status: 'error', currentStepIndex: -1, message: userFriendlyError } });
+      dispatch({ type: 'SET_AI_LIVE_ACTIONS', payload: [] });
+      dispatch({ type: 'SET_AI_LIVE_TARGETS', payload: [] });
       dispatch({ type: 'ADD_AI_LOG', payload: {
           timestamp: new Date().toLocaleTimeString(),
           prompt: aiPrompt,
@@ -1046,7 +1156,7 @@ const App: React.FC = () => {
     } finally {
       dispatch({ type: 'SET_AI_LOADING', payload: false });
     }
-  }, [aiPrompt, selectedElementId, elements, artboard, animation.duration, currentTime, dispatch]);
+  }, [aiPrompt, selectedElementId, elements, artboard, animation.duration, currentTime, dispatch, aiAgentSettings]);
 
 
   const availableMotionPathSources = useMemo(() => {

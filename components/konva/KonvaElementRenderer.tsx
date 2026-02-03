@@ -72,7 +72,7 @@ const KonvaElementRenderer: React.FC<KonvaElementRendererProps> = (props) => {
   } = props;
 
   const { state, dispatch } = useContext(AppContext);
-  const { onCanvasTextEditor } = state; 
+  const { onCanvasTextEditor, aiLiveTargets, aiAgentSettings } = state; 
   
   const stateRef = useRef(state); // To access latest state in callbacks
   useEffect(() => { stateRef.current = state; }, [state]);
@@ -226,6 +226,8 @@ const KonvaElementRenderer: React.FC<KonvaElementRendererProps> = (props) => {
     }
 
     const localRenderElements = elementsProp; 
+    const aiTargetIds = new Set(aiLiveTargets || []);
+    const showAiTargets = !!aiAgentSettings?.showTargets && aiTargetIds.size > 0;
     const currentElementIdsInKonva = new Set<string>();
     
     const updateOrCreateNode = (elementData: SVGElementData, parentKonvaGroup: Konva.Group): Konva.Node | null => { 
@@ -277,6 +279,7 @@ const KonvaElementRenderer: React.FC<KonvaElementRendererProps> = (props) => {
         const stageZoom = currentStage.scaleX() || 1; 
         const isMotionPathTarget = !!motionPathSelectionTargetElementId && elementData.id !== motionPathSelectionTargetElementId && ['path', 'rect', 'circle'].includes(elementData.type);
         const isTextPathTarget = !!textOnPathSelectionTargetElementId && elementData.id !== textOnPathSelectionTargetElementId && ['path', 'rect', 'circle'].includes(elementData.type);
+        const isAiTarget = showAiTargets && aiTargetIds.has(elementData.id);
         
         if (konvaNode instanceof Konva.Path || konvaNode instanceof Konva.Rect || konvaNode instanceof Konva.Ellipse || konvaNode instanceof Konva.Text || konvaNode instanceof Konva.Image ) {
           konvaNode.hitStrokeWidth(isMotionPathTarget || isTextPathTarget ? (PATH_HITBOX_EXTRA_WIDTH * 3) / stageZoom : PATH_HITBOX_EXTRA_WIDTH / stageZoom);
@@ -343,6 +346,20 @@ const KonvaElementRenderer: React.FC<KonvaElementRendererProps> = (props) => {
         if (displayElement.clipPath && artboard.defs?.clipPaths) {
         } else {
             propsForFrame.clipFunc = undefined; 
+        }
+
+        if (konvaNode instanceof Konva.Shape && (!showAiTargets || !isAiTarget)) {
+            propsForFrame.shadowColor = 'transparent';
+            propsForFrame.shadowBlur = 0;
+            propsForFrame.shadowOpacity = 0;
+            propsForFrame.shadowOffset = { x: 0, y: 0 };
+        }
+        if (isAiTarget && konvaNode instanceof Konva.Shape) {
+            const highlightBlur = Math.max(6, 12 / stageZoom);
+            propsForFrame.shadowColor = '#2dd4ff';
+            propsForFrame.shadowBlur = highlightBlur;
+            propsForFrame.shadowOpacity = 0.9;
+            propsForFrame.shadowOffset = { x: 0, y: 0 };
         }
 
         const modelX = Number.isFinite(displayElement.x) ? displayElement.x : 0;
@@ -656,7 +673,9 @@ const KonvaElementRenderer: React.FC<KonvaElementRendererProps> = (props) => {
       artboardGroupRef, elementNodeMapRef, imageNodeCacheRef, 
       transformerRef, nodeIsBeingDirectlyDraggedRef, 
       onCanvasTextEditor,
-      currentTool
+      currentTool,
+      aiLiveTargets,
+      aiAgentSettings
     ]
   ); 
   
