@@ -123,6 +123,194 @@ function prepareElementForPrompt(element: SVGElementData): AiPromptElementInput 
     return preparedElement;
 }
 
+type ActionElementInfo = {
+  id: string;
+  type: SVGElementData['type'] | 'element';
+  name?: string;
+  parentId?: string | null;
+};
+
+function buildElementLabel(id: string, existingMap: Map<string, ActionElementInfo>, createdMap: Map<string, ActionElementInfo>): string {
+  const info = createdMap.get(id) || existingMap.get(id);
+  if (!info) return `element ${id.slice(-4)}`;
+  const baseName = info.name ? info.name : `${info.type} ${id.slice(-4)}`;
+  if (info.parentId) {
+    const parent = createdMap.get(info.parentId) || existingMap.get(info.parentId);
+    if (parent) {
+      const parentName = parent.name ? parent.name : parent.type;
+      return `${parentName} > ${baseName}`;
+    }
+  }
+  return baseName;
+}
+
+function summarizeActions(actions: AppAction[], existingElements: AiPromptElementInput[]): string {
+  const existingMap = new Map<string, ActionElementInfo>();
+  existingElements.forEach(el => existingMap.set(el.id, { id: el.id, type: el.type, name: el.name, parentId: el.parentId }));
+  const createdMap = new Map<string, ActionElementInfo>();
+  const createdOrder: string[] = [];
+  const updatedMap = new Map<string, Set<string>>();
+  const animatedMap = new Map<string, Set<string>>();
+  const deleted = new Set<string>();
+  let duration: number | null = null;
+  let speed: number | null = null;
+  let artboardChanged = false;
+  let playback: 'play' | 'pause' | null = null;
+
+  const addProp = (map: Map<string, Set<string>>, id: string, prop: string) => {
+    if (!map.has(id)) map.set(id, new Set());
+    map.get(id)!.add(prop);
+  };
+
+  actions.forEach(action => {
+    switch (action.type) {
+      case 'ADD_ELEMENT': {
+        const id = action.payload?.props?.id;
+        if (typeof id === 'string') {
+          createdOrder.push(id);
+          createdMap.set(id, {
+            id,
+            type: action.payload.type,
+            name: action.payload.props?.name,
+            parentId: action.payload.targetParentId ?? action.payload.props?.parentId ?? null,
+          });
+        }
+        break;
+      }
+      case 'UPDATE_ELEMENT_PROPS': {
+        const id = action.payload?.id;
+        if (typeof id === 'string') {
+          Object.keys(action.payload.props || {}).forEach(prop => addProp(updatedMap, id, prop));
+        }
+        break;
+      }
+      case 'UPDATE_ELEMENT_TRANSFORM': {
+        const id = action.payload?.elementId;
+        if (typeof id === 'string') {
+          Object.keys(action.payload.newTransform || {}).forEach(prop => addProp(updatedMap, id, prop));
+        }
+        break;
+      }
+      case 'UPDATE_ELEMENT_NAME': {
+        const id = action.payload?.id;
+        if (typeof id === 'string') addProp(updatedMap, id, 'name');
+        break;
+      }
+      case 'ADD_KEYFRAME': {
+        const id = action.payload?.elementId;
+        if (typeof id === 'string') addProp(animatedMap, id, String(action.payload.property || 'animation'));
+        break;
+      }
+      case 'REMOVE_KEYFRAME':
+      case 'UPDATE_KEYFRAME_TIME':
+      case 'UPDATE_KEYFRAME_PROPERTIES': {
+        const id = action.payload?.elementId;
+        if (typeof id === 'string') addProp(animatedMap, id, String(action.payload.property || 'animation'));
+        break;
+      }
+      case 'SCALE_KEYFRAME_GROUP_TIMES': {
+        const id = action.payload?.elementId;
+        if (typeof id === 'string' && Array.isArray(action.payload.propertiesToScale)) {
+          action.payload.propertiesToScale.forEach(prop => addProp(animatedMap, id, String(prop)));
+        }
+        break;
+      }
+      case 'SHIFT_ELEMENT_ANIMATION_TIMES': {
+        const id = action.payload?.elementId;
+        if (typeof id === 'string') addProp(animatedMap, id, 'animation');
+        break;
+      }
+      case 'SHIFT_PROPERTY_GROUP_TIMES': {
+        const id = action.payload?.elementId;
+        if (typeof id === 'string' && Array.isArray(action.payload.propertiesToShift)) {
+          action.payload.propertiesToShift.forEach(prop => addProp(animatedMap, id, String(prop)));
+        }
+        break;
+      }
+      case 'UPDATE_ANIMATION_FROM_AI': {
+        const id = action.payload?.elementId;
+        if (typeof id === 'string') addProp(animatedMap, id, 'animation');
+        break;
+      }
+      case 'ASSIGN_MOTION_PATH': {
+        const id = action.payload?.elementId;
+        if (typeof id === 'string') addProp(updatedMap, id, 'motionPath');
+        break;
+      }
+      case 'ASSIGN_TEXT_PATH': {
+        const id = action.payload?.textElementId;
+        if (typeof id === 'string') addProp(updatedMap, id, 'textPath');
+        break;
+      }
+      case 'DELETE_ELEMENT': {
+        if (typeof action.payload === 'string') deleted.add(action.payload);
+        break;
+      }
+      case 'UPDATE_ANIMATION_DURATION':
+        duration = action.payload;
+        break;
+      case 'SET_PLAYBACK_SPEED':
+        speed = action.payload;
+        break;
+      case 'SET_ARTBOARD_PROPS':
+        artboardChanged = true;
+        break;
+      case 'SET_IS_PLAYING':
+        playback = action.payload ? 'play' : 'pause';
+        break;
+      default:
+        break;
+    }
+  });
+
+  const createdSet = new Set(createdOrder);
+  const createdIds = Array.from(createdSet);
+  const updatedIds = Array.from(updatedMap.keys()).filter(id => !createdSet.has(id));
+  const animatedIds = Array.from(animatedMap.keys()).filter(id => !createdSet.has(id));
+  const deletedIds = Array.from(deleted);
+
+  const formatProps = (props: Set<string>) => {
+    if (!props || props.size === 0) return '';
+    const items = Array.from(props);
+    const mapped = items.map(prop => {
+      if (prop === 'x' || prop === 'y') return 'position';
+      if (prop === 'width' || prop === 'height') return 'size';
+      if (prop === 'strokeWidth') return 'stroke width';
+      if (prop === 'fontSize') return 'font size';
+      if (prop === 'letterSpacing') return 'letter spacing';
+      if (prop === 'lineHeight') return 'line height';
+      if (prop === 'motionPath') return 'motion path';
+      if (prop === 'textPath') return 'text path';
+      return prop;
+    });
+    const deduped = Array.from(new Set(mapped));
+    const preview = deduped.slice(0, 3).join(', ');
+    return deduped.length > 3 ? `${preview} +${deduped.length - 3}` : preview;
+  };
+
+  const formatList = (ids: string[], map: Map<string, Set<string>> | null) => {
+    const limit = 3;
+    const items = ids.slice(0, limit).map(id => {
+      const label = buildElementLabel(id, existingMap, createdMap);
+      const props = map ? formatProps(map.get(id) || new Set()) : '';
+      return props ? `${label} (${props})` : label;
+    });
+    return ids.length > limit ? `${items.join(', ')} +${ids.length - limit} more` : items.join(', ');
+  };
+
+  const parts: string[] = [];
+  if (createdIds.length > 0) parts.push(`Created ${createdIds.length} element${createdIds.length > 1 ? 's' : ''}: ${formatList(createdIds, null)}.`);
+  if (updatedIds.length > 0) parts.push(`Updated ${updatedIds.length} element${updatedIds.length > 1 ? 's' : ''}: ${formatList(updatedIds, updatedMap)}.`);
+  if (animatedIds.length > 0) parts.push(`Animated ${animatedIds.length} element${animatedIds.length > 1 ? 's' : ''}: ${formatList(animatedIds, animatedMap)}.`);
+  if (deletedIds.length > 0) parts.push(`Deleted ${deletedIds.length} element${deletedIds.length > 1 ? 's' : ''}: ${formatList(deletedIds, null)}.`);
+  if (artboardChanged) parts.push('Updated the artboard.');
+  if (duration) parts.push(`Set duration to ${duration}s.`);
+  if (speed) parts.push(`Set playback speed to ${speed}x.`);
+  if (playback) parts.push(playback === 'play' ? 'Started playback.' : 'Paused playback.');
+
+  return parts.join(' ');
+}
+
 export const generateAiActions = async (
   selectedElement: SVGElementData | null,
   userTextInput: string,
@@ -176,8 +364,11 @@ export const generateAiActions = async (
         const parsedReplaced = JSON.parse(stringifiedActions) as { actions: AppAction[]; plan: AiPlan | null };
         const finalActions = parsedReplaced.actions;
         const finalPlan = parsedReplaced.plan || undefined;
-        
-        const message = parsedData.summary.trim() || `Generated ${finalActions.length} action(s).`;
+        const actionSummary = summarizeActions(finalActions, existingElementsForPrompt);
+        const baseSummary = parsedData.summary.trim();
+        const message = actionSummary
+          ? (baseSummary ? `${baseSummary} ${actionSummary}` : actionSummary)
+          : (baseSummary || `Generated ${finalActions.length} action(s).`);
 
         const log: AILogEntry = {
             timestamp: new Date().toLocaleTimeString(),

@@ -994,24 +994,22 @@ const App: React.FC = () => {
       const showLiveActions = !!agentSettings.showLiveActions;
 
       const getTargetIdsForActions = (actions: AppAction[]) => {
-        const targets = new Set<string>();
+        const created = new Set<string>();
+        const updated = new Set<string>();
+        const animated = new Set<string>();
+        const moved = new Set<string>();
+
         actions.forEach(action => {
           switch (action.type) {
             case 'ADD_ELEMENT':
-              if (action.payload?.props && typeof action.payload.props.id === 'string') targets.add(action.payload.props.id);
+              if (action.payload?.props && typeof action.payload.props.id === 'string') created.add(action.payload.props.id);
               break;
             case 'UPDATE_ELEMENT_PROPS':
             case 'UPDATE_ELEMENT_NAME':
-            case 'DELETE_ELEMENT':
-            case 'BRING_TO_FRONT':
-            case 'SEND_TO_BACK':
-            case 'BRING_FORWARD':
-            case 'SEND_BACKWARD':
-              if (typeof (action as any).payload === 'string') targets.add((action as any).payload);
-              else if (typeof (action as any).payload?.id === 'string') targets.add((action as any).payload.id);
+              if (typeof (action as any).payload?.id === 'string') updated.add((action as any).payload.id);
               break;
             case 'UPDATE_ELEMENT_TRANSFORM':
-              targets.add(action.payload.elementId);
+              updated.add(action.payload.elementId);
               break;
             case 'ADD_KEYFRAME':
             case 'REMOVE_KEYFRAME':
@@ -1021,35 +1019,44 @@ const App: React.FC = () => {
             case 'SHIFT_ELEMENT_ANIMATION_TIMES':
             case 'SHIFT_PROPERTY_GROUP_TIMES':
             case 'UPDATE_ANIMATION_FROM_AI':
-              targets.add(action.payload.elementId);
+              animated.add(action.payload.elementId);
               break;
             case 'REPARENT_ELEMENT':
-              targets.add(action.payload.elementId);
-              if (action.payload.newParentId) targets.add(action.payload.newParentId);
+              moved.add(action.payload.elementId);
+              if (action.payload.newParentId) moved.add(action.payload.newParentId);
               break;
             case 'MOVE_ELEMENT_IN_HIERARCHY':
-              targets.add(action.payload.draggedId);
-              if (action.payload.targetId) targets.add(action.payload.targetId);
+              moved.add(action.payload.draggedId);
+              if (action.payload.targetId) moved.add(action.payload.targetId);
               break;
             case 'GROUP_ELEMENT':
-              targets.add(action.payload.elementId);
+              moved.add(action.payload.elementId);
               break;
             case 'UNGROUP_ELEMENT':
-              targets.add(action.payload.groupId);
+              moved.add(action.payload.groupId);
               break;
             case 'ASSIGN_MOTION_PATH':
-              targets.add(action.payload.elementId);
-              if (action.payload.pathId) targets.add(action.payload.pathId);
+              moved.add(action.payload.elementId);
+              if (action.payload.pathId) moved.add(action.payload.pathId);
               break;
             case 'ASSIGN_TEXT_PATH':
-              targets.add(action.payload.textElementId);
-              if (action.payload.pathElementId) targets.add(action.payload.pathElementId);
+              moved.add(action.payload.textElementId);
+              if (action.payload.pathElementId) moved.add(action.payload.pathElementId);
               break;
             default:
               break;
           }
         });
-        return Array.from(targets);
+
+        const existingIds = new Set(stateRefForCallbacks.current.elements.map(el => el.id));
+        const choose = (set) => Array.from(set).filter(id => id && id !== artboard.id && (existingIds.has(id) || created.has(id)));
+
+        let candidates = choose(created);
+        if (candidates.length === 0) candidates = choose(updated);
+        if (candidates.length === 0) candidates = choose(animated);
+        if (candidates.length === 0) candidates = choose(moved);
+
+        return candidates.slice(0, 6);
       };
 
       const setLiveFeedback = (actions: AppAction[]) => {
