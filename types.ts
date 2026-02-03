@@ -349,6 +349,7 @@ export interface AILogEntry {
   prompt: string;
   status: 'success' | 'error';
   message: string;
+  plan?: AiPlan;
 }
 
 export interface AiPlanStep {

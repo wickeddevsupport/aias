@@ -374,7 +374,8 @@ export const generateAiActions = async (
             timestamp: new Date().toLocaleTimeString(),
             prompt: userTextInput,
             status: 'success',
-            message: message
+            message: message,
+            plan: finalPlan,
         };
         return { actions: finalActions, log, plan: finalPlan };
     }

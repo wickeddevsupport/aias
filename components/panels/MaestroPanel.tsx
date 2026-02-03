@@ -11,6 +11,7 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
   const { aiLogs, aiPrompt, isAiLoading, aiError, selectedElementId, elements, artboard, aiPlan, aiPlanProgress, aiAgentSettings, aiLiveActions, aiLiveTargets } = state;
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const [openPlanKeys, setOpenPlanKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (logContainerRef.current) {
@@ -37,6 +38,15 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
   const clearLiveFeedback = () => {
     dispatch({ type: 'SET_AI_LIVE_ACTIONS', payload: [] });
     dispatch({ type: 'SET_AI_LIVE_TARGETS', payload: [] });
+  };
+
+  const togglePlanOpen = (key: string) => {
+    setOpenPlanKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   };
   
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -86,56 +96,6 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
       </div>
       {/* Log Area */}
       <div ref={logContainerRef} className="flex-1 overflow-y-auto custom-scrollbar border-y border-[var(--glass-border-color)] py-2 space-y-4">
-        {aiPlan && (
-          <div className="flex-shrink-0 border border-[var(--glass-border-color)] rounded-md p-2 bg-[rgba(var(--accent-rgb),0.04)]">
-            <div className="flex items-center justify-between text-xs text-text-secondary">
-              <span className="font-semibold text-accent-color">Live Plan</span>
-              <div className="flex items-center space-x-2 text-[10px]">
-                {agentSettings.showTargets && (
-                  <span className="text-text-placeholder">Targets: {liveTargetCount}</span>
-                )}
-                <span>{aiPlanProgress.status === 'running' ? 'Executing...' : aiPlanProgress.status === 'done' ? 'Done' : 'Idle'}</span>
-              </div>
-            </div>
-            <p className="text-xs text-text-primary mt-1">{aiPlan.summary}</p>
-            <div className="mt-2 space-y-1">
-              {aiPlan.steps.map((step, index) => {
-                const isCurrent = index === currentPlanStepIndex;
-                const isCompleted = index < currentPlanStepIndex && aiPlanProgress.status !== 'error';
-                return (
-                  <div key={step.id} className={`flex items-center justify-between text-xs p-1.5 rounded ${isCurrent ? 'bg-[rgba(var(--accent-rgb),0.12)] text-text-primary' : 'text-text-secondary'}`}>
-                    <div className="flex items-center space-x-2">
-                      <span className={`inline-flex w-4 h-4 items-center justify-center rounded-full border ${isCompleted ? 'border-green-400 text-green-400' : isCurrent ? 'border-accent-color text-accent-color' : 'border-[var(--glass-border-color)] text-text-secondary'}`}>
-                        {isCompleted ? 'OK' : index + 1}
-                      </span>
-                      <span className="font-medium">{step.title}</span>
-                    </div>
-                    <span className="text-[10px] text-text-placeholder">{step.actions?.length || 0} actions</span>
-                  </div>
-                );
-              })}
-            </div>
-            {currentPlanStep && (
-              <div className="mt-2 text-xs text-text-secondary">
-                <strong>Now:</strong> {currentPlanStep.title}
-              </div>
-            )}
-            {currentActionTypes.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {currentActionTypes.map(type => (
-                  <span key={type} className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(var(--accent-rgb),0.15)] text-accent-color">
-                    {type}
-                  </span>
-                ))}
-              </div>
-            )}
-            {nextPlanStep && (
-              <div className="text-xs text-text-placeholder">
-                <strong>Next:</strong> {nextPlanStep.title}
-              </div>
-            )}
-          </div>
-        )}
         {aiLogs.length === 0 ? (
           <div className="text-center text-sm text-text-secondary italic pt-8 px-4">
             Tell me what you want to create or animate! Try things like:
@@ -146,8 +106,17 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
             </ul>
           </div>
         ) : (
-          aiLogs.map((log, index) => (
-            <div key={`${log.timestamp}-${index}`} className="space-y-3 animate-fade-in-up px-1">
+          aiLogs.map((log, index) => {
+            const logKey = `${log.timestamp}-${index}`;
+            const hasPlan = !!log.plan;
+            const isLatest = index === aiLogs.length - 1;
+            const shouldUseLiveProgress = hasPlan && isLatest && log.plan?.id === aiPlan?.id;
+            const progressIndex = shouldUseLiveProgress ? currentPlanStepIndex : (log.plan?.steps?.length ? log.plan.steps.length - 1 : -1);
+            const planStatus = shouldUseLiveProgress ? aiPlanProgress.status : 'done';
+            const isPlanOpen = openPlanKeys.has(logKey);
+
+            return (
+            <div key={logKey} className="space-y-3 animate-fade-in-up px-1">
               {/* User Prompt Bubble */}
               <div className="flex justify-end group">
                 <div className="bg-[rgba(var(--accent-rgb),0.1)] text-text-primary p-2.5 rounded-lg rounded-br-none max-w-[85%] flex items-start space-x-2">
@@ -168,11 +137,67 @@ const MaestroPanel: React.FC<MaestroPanelProps> = ({ onGenerateAiResponse }) => 
                             <span className="font-mono">at {log.timestamp}</span>
                         </div>
                         <p className={`text-sm ${log.status === 'error' ? 'text-red-300' : 'text-text-primary'}`}>{log.message}</p>
+                        {hasPlan && (
+                          <div className="mt-3 border border-[var(--glass-border-color)] rounded-md bg-[rgba(var(--accent-rgb),0.04)]">
+                            <button
+                              onClick={() => togglePlanOpen(logKey)}
+                              className="w-full flex items-center justify-between px-2.5 py-2 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                              type="button"
+                            >
+                              <span className="font-semibold text-accent-color">Plan ({log.plan?.steps?.length || 0} steps)</span>
+                              <span className="text-[10px] text-text-placeholder">
+                                {planStatus === 'running' ? 'Running' : planStatus === 'error' ? 'Error' : 'Done'} • {isPlanOpen ? 'Hide' : 'Show'}
+                              </span>
+                            </button>
+                            {isPlanOpen && log.plan && (
+                              <div className="px-2.5 pb-2 space-y-2">
+                                <p className="text-xs text-text-primary">{log.plan.summary}</p>
+                                <div className="space-y-1">
+                                  {log.plan.steps.map((step, stepIndex) => {
+                                    const isCurrent = shouldUseLiveProgress && stepIndex === progressIndex;
+                                    const isCompleted = stepIndex < progressIndex;
+                                    return (
+                                      <div key={step.id} className={`flex items-center justify-between text-xs p-1.5 rounded ${isCurrent ? 'bg-[rgba(var(--accent-rgb),0.12)] text-text-primary' : 'text-text-secondary'}`}>
+                                        <div className="flex items-center space-x-2">
+                                          <span className={`inline-flex w-4 h-4 items-center justify-center rounded-full border ${isCompleted ? 'border-green-400 text-green-400' : isCurrent ? 'border-accent-color text-accent-color' : 'border-[var(--glass-border-color)] text-text-secondary'}`}>
+                                            {isCompleted ? 'OK' : stepIndex + 1}
+                                          </span>
+                                          <span className="font-medium">{step.title}</span>
+                                        </div>
+                                        <span className="text-[10px] text-text-placeholder">{step.actions?.length || 0} actions</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                {shouldUseLiveProgress && currentPlanStep && (
+                                  <div className="text-xs text-text-secondary">
+                                    <strong>Now:</strong> {currentPlanStep.title}
+                                  </div>
+                                )}
+                                {shouldUseLiveProgress && currentActionTypes.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {currentActionTypes.map(type => (
+                                      <span key={type} className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(var(--accent-rgb),0.15)] text-accent-color">
+                                        {type}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {shouldUseLiveProgress && nextPlanStep && (
+                                  <div className="text-xs text-text-placeholder">
+                                    <strong>Next:</strong> {nextPlanStep.title}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                     </div>
                 </div>
               </div>
             </div>
-          ))
+          );
+          })
         )}
       </div>
       {/* Input Area */}
